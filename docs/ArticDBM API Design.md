@@ -143,20 +143,21 @@ API: REST
 
 ```
 ---
-ArticHost: somedomain.localnet  
-ArticPort: 38306  
-ArticDB: somedb  
-API: REST  
-Initialize:  
-        Tables:  
-                Sometable:  
-                        Columns:  
-                                - Name: str  
-                                  Address: str  
-                Users;
-                        - Someuser  
-                        - Someuser2
+ArticHost: somedomain.localnet
+ArticPort: 38306
+ArticDB: somedb
+API: REST
+Initialize:
+  Tables:
+    Sometable:
+      Columns:
+        - Name: str
+        - Address: str
+      Users:
+        - Someuser
+        - Someuser2
 ```
+
 
 # Future Vision
 
