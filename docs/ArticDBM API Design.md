@@ -72,31 +72,31 @@ Database: ArticDB
 ### ADMIN
 
 ```/admin/user/add (Adds or updates user)  
-{ username, password, role }```
+{ username, password, role }
 
-```/admin/user/del (deletes user)  
+/admin/user/del (deletes user)  
 { username }```
 
 ### DB
 
 ```/db/add (Create/Update DB)  
-{ dbname:str, dbType:str, user:liststr, options\*:json }```
+{ dbname:str, dbType:str, user:liststr, options\*:json }
 
-```/db/del (delete DB)  
+/db/del (delete DB)  
 { dbname:str }
-```
-```/db/table/add (Create / update table)  
+
+/db/table/add (Create / update table)  
 {dbName:str, tbName:str, columns:json{name:pydalType}, user\*:liststr }```
 
 ### DATA 
 
 ```/{{dbname}}/{tableName}/query (pull data)  
-{columns:liststr, condition: str}```
+{columns:liststr, condition: str}
 
-```/{{dbname}}/{tableName}/update (Update existing)  
-{columns:liststr, condition: str}```
+/{{dbname}}/{tableName}/update (Update existing)  
+{columns:liststr, condition: str}
 
-```/{{dbname}}/{tableName}/insert  
+/{{dbname}}/{tableName}/insert  
 Json{column:data…}```
 
 
@@ -104,9 +104,9 @@ Json{column:data…}```
 ### DBHOST
 
 ```/host/add (Create and update)  
-{dbFQDN, dbPort, dbUser, dbPass, dbPyDALType, dbTLS,}```
+{dbFQDN, dbPort, dbUser, dbPass, dbPyDALType, dbTLS,}
 
-```/host/del (Delete)  
+/host/del (Delete)  
 {dbFQDN}```
 
 # ArticDBClient
@@ -129,6 +129,7 @@ ArticPort: 38306
 ArticDB: somedb  
 API: REST
 ```
+
 ### Initialization Config
 
 ```---
@@ -146,6 +147,7 @@ Initialize:
                         - Someuser  
                         - Someuser2
 ```
+
 # Future Vision
 
 ## gRPC
