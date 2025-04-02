@@ -131,7 +131,7 @@ There would be 3 clients in total:
 
 ### Basic Config
 
-```
+```yaml
 ---
 ArticHost: somedomain.localnet  
 ArticPort: 38306  
@@ -141,7 +141,7 @@ API: REST
 
 ### Initialization Config
 
-```
+```yaml
 ---
 ArticHost: somedomain.localnet
 ArticPort: 38306
