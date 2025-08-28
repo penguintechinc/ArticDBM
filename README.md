@@ -1,11 +1,14 @@
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/articdbm/articdbm) [![version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://semver.org) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0) [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://hub.docker.com/r/articdbm/proxy)
 
 ```
-    ___         __  _       ____  ____  __  __ 
-   /   |  _____/ /_(_)_____/ __ \/ __ )/ /  / /
-  / /| | / ___/ __/ / ___/ / / / __  / / / / / 
- / ___ |/ /  / /_/ / /__/ /_/ / /_/ / / / / /  
-/_/  |_/_/   \__/_/\___/_____/_____/_/ /_/_/   
+:::'###::::'########::'########:'####::'######:::::'########::'########::'##::::'##:
+::'## ##::: ##.... ##:... ##..::. ##::'##... ##:::: ##.... ##: ##.... ##: ###::'###:
+:'##:. ##:: ##:::: ##:::: ##::::: ##:: ##:::..::::: ##:::: ##: ##:::: ##: ####'####:
+'##:::. ##: ########::::: ##::::: ##:: ##:::::::::: ##:::: ##: ########:: ## ### ##:
+ #########: ##.. ##:::::: ##::::: ##:: ##:::::::::: ##:::: ##: ##.... ##: ##. #: ##:
+ ##.... ##: ##::. ##::::: ##::::: ##:: ##::: ##:::: ##:::: ##: ##:::: ##: ##:.:: ##:
+ ##:::: ##: ##:::. ##:::: ##::::'####:. ######::::: ########:: ########:: ##:::: ##:
+..:::::..::..:::::..:::::..:::::....:::......::::::........:::........:::..:::::..::
                                               
    Arctic Database Manager - Stay Cool Under Pressure
 ```
@@ -41,7 +44,7 @@ mysql -h localhost -P 3306 -u your_user -p
 psql -h localhost -p 5432 -U your_user -d your_database
 ```
 
-## 🏗️ Architecture
+## 🏗️ Architecture Overview
 
 ArticDBM consists of two main components:
 
@@ -49,25 +52,42 @@ ArticDBM consists of two main components:
 - **Manager**: Python-based web interface for configuration, user management, and monitoring
 
 ```mermaid
-graph LR
-    A[Applications] --> B[ArticDBM Proxy]
-    B --> C[MySQL]
-    B --> D[PostgreSQL]
-    B --> E[MongoDB]
-    B --> F[Redis]
-    G[ArticDBM Manager] --> H[(Configuration)]
-    B -.-> H
+graph TD
+    A[Client Applications] -->|SQL Queries| B[ArticDBM Proxy]
+    B --> C[Authentication & Authorization]
+    C --> D[SQL Injection Detection]
+    D --> E[Query Router]
+    E -->|Read Queries| F[Read Replicas]
+    E -->|Write Queries| G[Primary Database]
+    H[ArticDBM Manager] -->|Configuration| I[Redis Cache]
+    B -->|Fetch Config| I
+    B -->|Metrics| J[Prometheus]
+    H -->|Store Config| K[PostgreSQL]
 ```
+
+## 🛠️ Components
+
+### ArticDBM Proxy
+- Written in Go for maximum performance
+- Handles database protocol translation
+- Performs security checks and routing
+- Maintains connection pools
+
+### ArticDBM Manager
+- Built with py4web framework
+- Web-based configuration interface
+- User and permission management
+- Real-time configuration updates
 
 ## 📦 Supported Databases
 
-| Database | Version | Features |
-|----------|---------|----------|
-| **MySQL** | 5.7+ | ✅ Full protocol support, connection pooling |
-| **PostgreSQL** | 11+ | ✅ Native protocol, read/write splitting |
-| **MSSQL** | 2017+ | ✅ TDS protocol support |
-| **MongoDB** | 4.0+ | ✅ Wire protocol, authentication |
-| **Redis** | 5.0+ | ✅ RESP protocol, command filtering |
+| Database | Version | Protocol Support | Features |
+|----------|---------|-----------------|----------|
+| MySQL | 5.7+ | Native MySQL | Full support |
+| PostgreSQL | 11+ | Native PostgreSQL | Full support |
+| MSSQL | 2017+ | TDS Protocol | Full support |
+| MongoDB | 4.0+ | MongoDB Wire | Full support |
+| Redis | 5.0+ | RESP Protocol | Full support |
 
 ## 🔒 Security Features
 
@@ -115,6 +135,20 @@ spec:
 - [🔒 **Security**](docs/security.md) - Security features and best practices
 - [🔌 **API Reference**](docs/api.md) - Manager API documentation
 - [📝 **Release Notes**](docs/release-notes.md) - Version history and changes
+- [🤝 **Contributing**](docs/contributing.md) - How to contribute
+- [⚖️ **License**](docs/LICENSE) - AGPL v3 license
+
+## 🔗 Links
+
+- [GitHub Repository](https://github.com/articdbm/articdbm)
+- [Docker Hub](https://hub.docker.com/r/articdbm/proxy)
+- [Website](https://articdbm.penguintech.io)
+
+## 💡 Getting Help
+
+- Check our [Usage Guide](docs/usage.md) for detailed instructions
+- Review [Security Best Practices](docs/security.md)
+- Submit issues on [GitHub](https://github.com/articdbm/articdbm/issues)
 
 ## 💻 Example Usage
 

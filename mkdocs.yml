@@ -74,7 +74,7 @@ plugins:
 nav:
   - Home: index.md
   - Getting Started:
-    - Overview: README.md
+    - Overview: ../README.md
     - Quick Start: usage.md
     - Installation: deployment.md
   - Architecture:
