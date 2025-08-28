@@ -26,9 +26,9 @@ This guide covers deploying the ArticDBM website and documentation to Cloudflare
 
 ```yaml
 Framework preset: None (Static HTML)
-Build command: (leave empty)
-Build output directory: /website
-Root directory: website
+Build command: npm install && npm run build
+Build output directory: website/dist
+Root directory: (leave empty - use repository root)
 ```
 
 ### Step 3: Environment Variables
