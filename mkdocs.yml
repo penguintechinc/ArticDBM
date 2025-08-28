@@ -72,18 +72,17 @@ plugins:
       minify_html: true
 
 nav:
-  - Home: index.md
+  - Home: INDEX.md
   - Getting Started:
-    - Overview: ../README.md
     - Usage Guide: USAGE.md
   - Architecture:
-    - System Design: architecture.md
+    - System Design: ARCHITECTURE.md
   - Deployment:
-    - Kubernetes: kubernetes.md
-    - Cloudflare Setup: cloudflare-setup.md
+    - Kubernetes: KUBERNETES.md
+    - Cloudflare Setup: CLOUDFLARE-SETUP.md
   - Community:
     - Contributing: CONTRIBUTING.md
-    - Release Notes: release-notes.md
+    - Release Notes: RELEASE-NOTES.md
 
 extra:
   social:

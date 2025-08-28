@@ -354,4 +354,4 @@ rows, err := db.Query("SELECT * FROM users")
 ```
 
 ---
-*For more information, see the [Architecture Guide](architecture.md) or [API Reference](api.md).*
+*For more information, see the [Architecture Guide](ARCHITECTURE.md) or [Cloudflare Setup Guide](CLOUDFLARE-SETUP.md).*

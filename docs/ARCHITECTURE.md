@@ -356,4 +356,4 @@ Per-User:
 ```
 
 ---
-*For implementation details, see the [Usage Guide](usage.md) or [API Reference](api.md).*
+*For implementation details, see the [Usage Guide](USAGE.md) or [Kubernetes Deployment](KUBERNETES.md).*
