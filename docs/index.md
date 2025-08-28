@@ -109,4 +109,4 @@ ArticDBM is released under the [AGPL-3.0 License](LICENSE.md), ensuring it remai
 
 ---
 
-**Ready to get started?** Check out our [Usage Guide](USAGE.md) or jump straight into the [Quick Start](#-quick-start) above!
+**Ready to get started?** Check out our [Usage Guide](USAGE.md) or jump straight into the [Quick Start](#quick-start) above!
