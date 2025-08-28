@@ -70,4 +70,5 @@ id_rsa*
 */*.bak
 */*.pyc
 *.pyc
-*/.vscode
+.vscode/
+.claude/
