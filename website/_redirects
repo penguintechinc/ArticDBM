@@ -1,0 +1,9 @@
+# Cloudflare Pages redirects for ArticDBM
+
+# Redirect common paths
+/docs/* https://github.com/articdbm/articdbm/blob/main/docs/:splat 301
+/github https://github.com/articdbm/articdbm 301
+/download https://github.com/articdbm/articdbm/archive/refs/heads/main.zip 301
+
+# SPA fallback (if needed in future)
+# /* /index.html 200

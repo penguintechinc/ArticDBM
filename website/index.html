@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArticDBM - Arctic Database Manager</title>
+    <meta name="description" content="High-performance, security-focused database proxy for MySQL, PostgreSQL, MongoDB, Redis, and MSSQL">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <header class="header">
+        <nav class="nav">
+            <div class="nav-brand">
+                <h1 class="logo">🧊 ArticDBM</h1>
+                <span class="tagline">Stay Cool Under Pressure</span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#docs">Docs</a></li>
+                <li><a href="#download">Download</a></li>
+                <li><a href="https://github.com/articdbm/articdbm" class="btn-primary">GitHub</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="hero-content">
+                <h2 class="hero-title">Arctic Database Manager</h2>
+                <p class="hero-subtitle">
+                    A high-performance, security-focused database proxy that provides centralized 
+                    authentication, authorization, and monitoring for multiple database systems.
+                </p>
+                <div class="hero-buttons">
+                    <a href="#download" class="btn-hero">Get Started</a>
+                    <a href="https://github.com/articdbm/articdbm" class="btn-secondary">View on GitHub</a>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="code-snippet">
+                    <div class="code-header">
+                        <span class="code-title">Quick Start</span>
+                        <div class="code-dots">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                    <pre><code># Start ArticDBM
+docker-compose up -d
+
+# Connect through proxy
+mysql -h localhost -P 3306 -u user -p</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="stats" id="stats">
+            <div class="stats-container">
+                <div class="stat">
+                    <h3 class="stat-number">5</h3>
+                    <p class="stat-label">Database Types</p>
+                </div>
+                <div class="stat">
+                    <h3 class="stat-number">100K+</h3>
+                    <p class="stat-label">Queries/Second</p>
+                </div>
+                <div class="stat">
+                    <h3 class="stat-number">&lt;1ms</h3>
+                    <p class="stat-label">Added Latency</p>
+                </div>
+                <div class="stat">
+                    <h3 class="stat-number">14+</h3>
+                    <p class="stat-label">Security Patterns</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="features" id="features">
+            <div class="container">
+                <h2 class="section-title">Features That Keep You Cool</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">🗄️</div>
+                        <h3>Multi-Database Support</h3>
+                        <p>Native support for MySQL, PostgreSQL, MSSQL, MongoDB, and Redis with full protocol compatibility.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔒</div>
+                        <h3>Advanced Security</h3>
+                        <p>Real-time SQL injection detection, fine-grained permissions, and comprehensive audit logging.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">⚡</div>
+                        <h3>High Performance</h3>
+                        <p>Connection pooling, read/write splitting, and intelligent load balancing for optimal performance.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📊</div>
+                        <h3>Monitoring</h3>
+                        <p>Prometheus metrics, real-time dashboards, and detailed performance analytics.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">☁️</div>
+                        <h3>Cloud Native</h3>
+                        <p>Docker containers, Kubernetes ready, with support for AWS, GCP, and Azure.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔄</div>
+                        <h3>High Availability</h3>
+                        <p>Cluster mode with shared configuration, automatic failover, and zero-downtime updates.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="architecture" id="architecture">
+            <div class="container">
+                <h2 class="section-title">Simple Yet Powerful Architecture</h2>
+                <div class="architecture-diagram">
+                    <div class="arch-layer">
+                        <div class="arch-box">
+                            <h4>Applications</h4>
+                            <p>Your existing apps</p>
+                        </div>
+                    </div>
+                    <div class="arch-arrow">↓</div>
+                    <div class="arch-layer">
+                        <div class="arch-box primary">
+                            <h4>ArticDBM Proxy</h4>
+                            <p>Security • Routing • Pooling</p>
+                        </div>
+                        <div class="arch-box secondary">
+                            <h4>Manager</h4>
+                            <p>Configuration • Monitoring</p>
+                        </div>
+                    </div>
+                    <div class="arch-arrow">↓</div>
+                    <div class="arch-layer">
+                        <div class="arch-box">MySQL</div>
+                        <div class="arch-box">PostgreSQL</div>
+                        <div class="arch-box">MongoDB</div>
+                        <div class="arch-box">Redis</div>
+                        <div class="arch-box">MSSQL</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="cta" id="download">
+            <div class="container">
+                <h2 class="cta-title">Ready to Get Started?</h2>
+                <p class="cta-subtitle">Deploy ArticDBM in minutes with Docker Compose or Kubernetes</p>
+                <div class="cta-buttons">
+                    <a href="https://github.com/articdbm/articdbm/archive/refs/heads/main.zip" class="btn-cta">Download Now</a>
+                    <a href="https://github.com/articdbm/articdbm/blob/main/docs/README.md" class="btn-docs">View Documentation</a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>🧊 ArticDBM</h3>
+                    <p>High-performance database proxy for the modern cloud era.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Resources</h4>
+                    <ul>
+                        <li><a href="https://github.com/articdbm/articdbm/blob/main/docs/README.md">Documentation</a></li>
+                        <li><a href="https://github.com/articdbm/articdbm/blob/main/docs/usage.md">Getting Started</a></li>
+                        <li><a href="https://github.com/articdbm/articdbm/blob/main/docs/api.md">API Reference</a></li>
+                        <li><a href="https://github.com/articdbm/articdbm/blob/main/docs/release-notes.md">Release Notes</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Community</h4>
+                    <ul>
+                        <li><a href="https://github.com/articdbm/articdbm">GitHub</a></li>
+                        <li><a href="https://github.com/articdbm/articdbm/issues">Issues</a></li>
+                        <li><a href="https://github.com/articdbm/articdbm/discussions">Discussions</a></li>
+                        <li><a href="https://github.com/articdbm/articdbm/blob/main/docs/contributing.md">Contributing</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Legal</h4>
+                    <ul>
+                        <li><a href="https://github.com/articdbm/articdbm/blob/main/docs/LICENSE">License (AGPL-3.0)</a></li>
+                        <li><a href="https://github.com/articdbm/articdbm/blob/main/docs/security.md">Security Policy</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 ArticDBM. Licensed under AGPL-3.0. Made with ❄️ for the developer community.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
