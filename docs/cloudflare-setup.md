@@ -85,29 +85,109 @@ The `_redirects` file handles common redirects:
 
 ## 📚 Documentation Site (docs.articdbm.penguintech.io)
 
-### Option 1: MkDocs Material on Cloudflare Pages
+The ArticDBM documentation is built with MkDocs Material and can be deployed to Cloudflare Pages for fast, global distribution.
 
-1. **Create Separate Pages Project**
-   - New Pages project connected to same repository
-   - Use different custom domain: `docs.articdbm.penguintech.io`
+### MkDocs Material on Cloudflare Pages
+
+#### Step 1: Create Documentation Pages Project
+
+1. **New Pages Project**
+   - Go to Cloudflare Pages dashboard
+   - Click **Create a project**
+   - Connect to the same `articdbm/articdbm` repository
+   - Use a different project name: `articdbm-docs`
 
 2. **Build Configuration**
    ```yaml
-   Framework preset: Other
-   Build command: pip install -r requirements.txt && mkdocs build
+   Framework preset: Other (or None)
+   Build command: pip install -r requirements.txt && mkdocs build --strict
    Build output directory: site
-   Root directory: (leave empty)
+   Root directory: (leave empty - uses repository root)
+   Node.js version: Not needed (Python-based build)
    ```
 
-3. **Python Runtime Configuration**
-   The repository includes:
-   - `requirements.txt` with MkDocs and extensions
-   - `runtime.txt` specifying Python 3.13
+#### Step 2: Python Runtime Configuration
 
-4. **Environment Variables**
-   ```yaml
-   PYTHON_VERSION: 3.13
+The repository includes these files for proper Python environment:
+
+- **`requirements.txt`** - MkDocs and extensions:
+  ```txt
+  mkdocs>=1.5.0
+  mkdocs-material>=9.4.0
+  mkdocs-git-revision-date-localized-plugin>=1.2.0
+  mkdocs-minify-plugin>=0.7.0
+  pymdown-extensions>=10.3.0
+  ```
+
+- **`runtime.txt`** - Python version:
+  ```txt
+  python-3.13
+  ```
+
+#### Step 3: Environment Variables
+
+Set these in the Pages project settings:
+
+```yaml
+PYTHON_VERSION: 3.13
+MKDOCS_STRICT: true  # Optional: fail build on warnings
+```
+
+#### Step 4: Custom Domain Setup
+
+1. **Add Custom Domain**
+   - In the docs Pages project: **Custom domains**
+   - Add: `docs.articdbm.penguintech.io`
+
+2. **DNS Configuration**
+   ```dns
+   Type: CNAME
+   Name: docs
+   Target: articdbm-docs.pages.dev
+   Proxy status: Proxied (orange cloud)
+   TTL: Auto
    ```
+
+#### Step 5: MkDocs Configuration
+
+The `mkdocs.yml` includes Arctic theme colors and features:
+
+```yaml
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue      # Arctic blue
+      accent: cyan       # Ice blue
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate  
+      primary: blue
+      accent: cyan
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Overview: ../README.md
+    - Usage Guide: USAGE.md
+  - Architecture:
+    - System Design: architecture.md
+  - Deployment:
+    - Kubernetes: kubernetes.md
+    - Cloudflare Setup: cloudflare-setup.md
+  - Community:
+    - Contributing: CONTRIBUTING.md
+```
+
+#### Features Enabled
+
+- **Search**: Full-text search across all documentation
+- **Navigation**: Tabbed navigation with auto-expand
+- **Code Highlighting**: Syntax highlighting for all languages
+- **Mermaid Diagrams**: Architecture diagrams support
+- **Git Integration**: Last modified dates from Git history
+- **Responsive Design**: Mobile-optimized layout
+- **Dark Mode**: Automatic theme switching
 
 ### Option 2: GitHub Pages Integration
 
