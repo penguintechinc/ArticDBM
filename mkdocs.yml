@@ -84,6 +84,7 @@ nav:
     - Manager API: api.md
     - Configuration: configuration.md
   - Deployment:
+    - Kubernetes: kubernetes.md
     - Cloudflare Setup: cloudflare-setup.md
   - Community:
     - Contributing: contributing.md

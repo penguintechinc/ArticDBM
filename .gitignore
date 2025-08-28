@@ -1,4 +1,7 @@
-*.yaml
+# *.yaml  # Too broad - commented out
+*secret*.yaml
+*config*.yaml
+*credentials*.yaml
 *secret*
 id_rsa*
 *.key
@@ -6,7 +9,7 @@ id_rsa*
 *.log
 *.log.*
 *.key
-*.yaml
+# *.yaml  # duplicate removed
 */*.7z
 */*.apk
 */*.asc
@@ -26,7 +29,12 @@ id_rsa*
 */*.ipa
 */*.iso
 */*.jks
-*/*.json
+# */*.json  # Too broad - commented out
+*/*.key
+*/*secret*.json
+*/*config*.json
+*/credentials*.json
+*/auth*.json
 */*.kdbx
 */*.keytab
 */*.log
@@ -62,4 +70,4 @@ id_rsa*
 */*.bak
 */*.pyc
 *.pyc
-
+*/.vscode
