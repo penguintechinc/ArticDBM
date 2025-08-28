@@ -611,6 +611,9 @@ body {
     max-width: 1400px;
     margin-left: auto;
     margin-right: auto;
+    /* Chrome grid fixes */
+    grid-template-rows: auto;
+    place-items: center;
 }
 
 .flow-step {
@@ -624,6 +627,9 @@ body {
     transition: all 0.3s ease;
     position: relative;
     overflow: hidden;
+    /* Chrome rendering improvements */
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 .flow-step::before {
@@ -659,19 +665,26 @@ body {
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
+.flow-content {
+    position: relative;
+    z-index: 1;
+}
+
 .flow-icon {
     font-size: 2.5rem;
     margin-bottom: 1rem;
 }
 
-.flow-step h4 {
+.flow-step h4,
+.flow-content h4 {
     color: var(--primary-blue);
     margin-bottom: 1rem;
     font-size: 1.1rem;
     font-weight: 600;
 }
 
-.flow-step p {
+.flow-step p,
+.flow-content p {
     color: var(--arctic-gray);
     font-size: 0.9rem;
     line-height: 1.4;
