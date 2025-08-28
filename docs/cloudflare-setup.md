@@ -94,22 +94,19 @@ The `_redirects` file handles common redirects:
 2. **Build Configuration**
    ```yaml
    Framework preset: Other
-   Build command: pip install -r requirements-docs.txt && mkdocs build
+   Build command: pip install -r requirements.txt && mkdocs build
    Build output directory: site
    Root directory: (leave empty)
    ```
 
-3. **Add requirements-docs.txt**
-   ```txt
-   mkdocs-material>=9.0.0
-   pymdown-extensions>=10.0.0
-   mkdocs-git-revision-date-localized-plugin>=1.2.0
-   mkdocs-minify-plugin>=0.7.0
-   ```
+3. **Python Runtime Configuration**
+   The repository includes:
+   - `requirements.txt` with MkDocs and extensions
+   - `runtime.txt` specifying Python 3.13
 
 4. **Environment Variables**
    ```yaml
-   PYTHON_VERSION: 3.11
+   PYTHON_VERSION: 3.13
    ```
 
 ### Option 2: GitHub Pages Integration
