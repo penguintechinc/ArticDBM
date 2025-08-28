@@ -122,10 +122,10 @@ Special thanks to all contributors who helped make this release possible.
 
 ### 📚 Documentation
 
-- [Usage Guide](usage.md)
-- [Architecture Overview](architecture.md)
-- [API Reference](api.md)
-- [Security Best Practices](security.md)
+- [Usage Guide](USAGE.md)
+- [Architecture Overview](ARCHITECTURE.md)
+- [Kubernetes Deployment](KUBERNETES.md)
+- [Cloudflare Setup](CLOUDFLARE-SETUP.md)
 
 ### 📮 Support
 

@@ -129,14 +129,15 @@ spec:
 
 ## 📚 Documentation
 
-- [📘 **Usage Guide**](docs/usage.md) - Complete setup and configuration
-- [🏗️ **Architecture**](docs/architecture.md) - System design and components  
-- [🚀 **Deployment**](docs/deployment.md) - Production deployment guide
-- [🔒 **Security**](docs/security.md) - Security features and best practices
-- [🔌 **API Reference**](docs/api.md) - Manager API documentation
-- [📝 **Release Notes**](docs/release-notes.md) - Version history and changes
-- [🤝 **Contributing**](docs/contributing.md) - How to contribute
-- [⚖️ **License**](docs/LICENSE) - AGPL v3 license
+**📖 Complete Documentation**: [docs.articdbm.penguintech.io](https://docs.articdbm.penguintech.io)
+
+- [📘 **Usage Guide**](docs/USAGE.md) - Complete setup and configuration
+- [🏗️ **Architecture**](docs/ARCHITECTURE.md) - System design and components  
+- [🚀 **Kubernetes Deployment**](docs/KUBERNETES.md) - Production deployment guide
+- [☁️ **Cloudflare Setup**](docs/CLOUDFLARE-SETUP.md) - Web hosting and CDN configuration
+- [📝 **Release Notes**](docs/RELEASE-NOTES.md) - Version history and changes
+- [🤝 **Contributing**](docs/CONTRIBUTING.md) - How to contribute
+- [⚖️ **License**](docs/LICENSE.md) - AGPL v3 license
 
 ## 🔗 Links
 
@@ -146,8 +147,9 @@ spec:
 
 ## 💡 Getting Help
 
-- Check our [Usage Guide](docs/usage.md) for detailed instructions
-- Review [Security Best Practices](docs/security.md)
+- Check our [Usage Guide](docs/USAGE.md) for detailed instructions
+- Review [Architecture Guide](docs/ARCHITECTURE.md) for system design details
+- Browse full documentation at [docs.articdbm.penguintech.io](https://docs.articdbm.penguintech.io)
 - Submit issues on [GitHub](https://github.com/articdbm/articdbm/issues)
 
 ## 💻 Example Usage
@@ -193,7 +195,7 @@ curl -X POST http://localhost:8000/api/servers \
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](docs/contributing.md) for details on:
+We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.md) for details on:
 
 - Code style and standards
 - Development environment setup
@@ -209,13 +211,14 @@ We welcome contributions! Please see our [Contributing Guide](docs/contributing.
 
 ## 🆘 Support
 
-- **Documentation**: [articdbm.penguintech.io](https://articdbm.penguintech.io)
+- **Documentation**: [docs.articdbm.penguintech.io](https://docs.articdbm.penguintech.io)
+- **Website**: [articdbm.penguintech.io](https://articdbm.penguintech.io)
 - **Issues**: [GitHub Issues](https://github.com/articdbm/articdbm/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/articdbm/articdbm/discussions)
 
 ## ⚖️ License
 
-ArticDBM is licensed under the [GNU Affero General Public License v3.0](docs/LICENSE) (AGPL-3.0). This ensures the project remains open source while allowing commercial use with certain obligations.
+ArticDBM is licensed under the [GNU Affero General Public License v3.0](docs/LICENSE.md) (AGPL-3.0). This ensures the project remains open source while allowing commercial use with certain obligations.
 
 ## 🏷️ Tags
 

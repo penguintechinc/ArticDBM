@@ -55,8 +55,8 @@ markdown_extensions:
   - pymdownx.tasklist:
       custom_checkbox: true
   - pymdownx.emoji:
-      emoji_index: !!python/name:materialx.emoji.twemoji
-      emoji_generator: !!python/name:materialx.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - admonition
   - pymdownx.details
   - attr_list
@@ -72,24 +72,17 @@ plugins:
       minify_html: true
 
 nav:
-  - Home: index.md
+  - Home: INDEX.md
   - Getting Started:
-    - Overview: ../README.md
-    - Quick Start: usage.md
-    - Installation: deployment.md
+    - Usage Guide: USAGE.md
   - Architecture:
-    - System Design: architecture.md
-    - Security: security.md
-  - API Reference:
-    - Manager API: api.md
-    - Configuration: configuration.md
+    - System Design: ARCHITECTURE.md
   - Deployment:
-    - Kubernetes: kubernetes.md
-    - Cloudflare Setup: cloudflare-setup.md
+    - Kubernetes: KUBERNETES.md
+    - Cloudflare Setup: CLOUDFLARE-SETUP.md
   - Community:
-    - Contributing: contributing.md
-    - Release Notes: release-notes.md
-    - License: LICENSE.md
+    - Contributing: CONTRIBUTING.md
+    - Release Notes: RELEASE-NOTES.md
 
 extra:
   social:
