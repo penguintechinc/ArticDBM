@@ -5,10 +5,8 @@
 *secret*
 id_rsa*
 *.key
-.idea/
 *.log
 *.log.*
-*.key
 # *.yaml  # duplicate removed
 */*.7z
 */*.apk
@@ -68,7 +66,19 @@ id_rsa*
 */*.log
 */*.table
 */*.bak
-*/*.pyc
-*.pyc
+# Moved to Python section below
+
+# IDE and editor files
 .vscode/
 .claude/
+.idea/
+
+# Build outputs
+site/
+dist/
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
