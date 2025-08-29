@@ -1262,21 +1262,433 @@ body {
 }
 
 .faq-item {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(135, 206, 235, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     border-radius: 12px;
-    padding: 1.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 2rem;
+    border: 2px solid rgba(135, 206, 235, 0.3);
+    box-shadow: 0 8px 16px rgba(135, 206, 235, 0.1);
+    transition: all 0.3s ease;
 }
 
 .faq-item h4 {
+    color: var(--dark-blue);
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.faq-item p {
+    color: var(--dark-blue);
+    opacity: 0.9;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.faq-item:hover {
+    transform: translateY(-4px);
+    border-color: var(--ice-blue);
+    box-shadow: 0 16px 32px rgba(135, 206, 235, 0.2);
+}
+
+/* Use Cases Section */
+.use-cases {
+    padding: 6rem 1rem;
+    background: linear-gradient(135deg, var(--dark-blue) 0%, var(--darker-blue) 100%);
+    position: relative;
+}
+
+.use-cases::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(ellipse at center, rgba(135, 206, 235, 0.1) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.use-cases .container {
+    position: relative;
+    z-index: 1;
+}
+
+.use-cases h2 {
+    color: white;
+    text-align: center;
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.use-cases .section-subtitle {
     color: var(--ice-blue);
+    text-align: center;
+    font-size: 1.2rem;
+    margin-bottom: 3rem;
+}
+
+.use-cases-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.use-case-card {
+    background: rgba(135, 206, 235, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 2px solid rgba(135, 206, 235, 0.3);
+    border-radius: 1rem;
+    padding: 2rem;
+    position: relative;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 16px rgba(135, 206, 235, 0.1);
+}
+
+.use-case-card:hover {
+    transform: translateY(-8px);
+    border-color: var(--ice-blue);
+    box-shadow: 0 20px 40px rgba(135, 206, 235, 0.2);
+}
+
+.use-case-card.featured {
+    border: 2px solid var(--ice-blue);
+    transform: scale(1.05);
+    box-shadow: 0 15px 30px rgba(135, 206, 235, 0.3);
+}
+
+.use-case-badge {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(45deg, var(--success-green), #66bb6a);
+    color: white;
+    padding: 0.5rem 1.5rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.use-case-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.use-case-card h3 {
+    color: var(--dark-blue);
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.use-case-card p {
+    color: var(--dark-blue);
+    opacity: 0.9;
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.use-case-features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-bottom: 1rem;
+}
+
+.use-case-tag {
+    background: rgba(135, 206, 235, 0.3);
+    color: var(--dark-blue);
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1px solid rgba(135, 206, 235, 0.5);
+}
+
+.revenue-highlight {
+    background: rgba(76, 175, 80, 0.15);
+    border: 2px solid rgba(76, 175, 80, 0.3);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+    text-align: center;
+}
+
+.revenue-highlight h4 {
+    color: var(--success-green);
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.revenue-highlight p {
+    color: var(--dark-blue);
+    font-weight: 600;
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+/* Pricing Hero */
+.pricing-hero {
+    padding: 8rem 1rem 4rem 1rem;
+}
+
+.pricing-hero .hero-content h1 {
+    font-size: 3rem;
+    margin-bottom: 1.5rem;
+}
+
+.pricing-hero .hero-description {
+    font-size: 1.2rem;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* Feature Comparison Table */
+.features-comparison {
+    padding: 6rem 1rem;
+    background: var(--dark-blue);
+}
+
+.comparison-table {
+    background: rgba(135, 206, 235, 0.15);
+    backdrop-filter: blur(10px);
+    border-radius: 1rem;
+    overflow: hidden;
+    margin-top: 3rem;
+    border: 2px solid rgba(135, 206, 235, 0.3);
+    box-shadow: 0 8px 16px rgba(135, 206, 235, 0.1);
+}
+
+.comparison-header {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    background: rgba(135, 206, 235, 0.25);
+    padding: 2rem 1rem;
+    border-bottom: 2px solid rgba(135, 206, 235, 0.3);
+    gap: 1rem;
+}
+
+.feature-column h3,
+.plan-column h3 {
+    color: var(--dark-blue);
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.plan-price {
+    color: var(--dark-blue);
+    font-size: 1.8rem;
+    font-weight: 800;
+    margin-bottom: 0.25rem;
+}
+
+.plan-price span {
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.plan-column p {
+    color: var(--dark-blue);
+    opacity: 0.8;
+    font-size: 0.9rem;
+}
+
+.feature-group {
+    grid-column: 1 / -1;
+    background: rgba(135, 206, 235, 0.2);
+    padding: 1rem;
+    border-bottom: 1px solid rgba(135, 206, 235, 0.3);
+}
+
+.feature-group h4 {
+    color: var(--dark-blue);
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.feature-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    padding: 1rem;
+    border-bottom: 1px solid rgba(135, 206, 235, 0.2);
+    gap: 1rem;
+    align-items: center;
+}
+
+.feature-row:hover {
+    background: rgba(135, 206, 235, 0.1);
+}
+
+.feature-name {
+    color: var(--dark-blue);
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.feature-check {
+    text-align: center;
+    font-size: 1.1rem;
+}
+
+.feature-check.included {
+    color: var(--success-green);
+}
+
+.feature-check.not-included {
+    color: #ff5252;
+    opacity: 0.7;
+}
+
+.feature-check.limited {
+    color: var(--dark-blue);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.feature-cta-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    padding: 2rem 1rem;
+    background: rgba(135, 206, 235, 0.25);
+    border-top: 2px solid rgba(135, 206, 235, 0.3);
+    gap: 1rem;
+}
+
+.feature-cta {
+    text-align: center;
+}
+
+.feature-cta .btn-pricing {
+    padding: 0.8rem 1.5rem;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Contact Section */
+.contact {
+    padding: 6rem 1rem;
+    background: linear-gradient(135deg, var(--dark-blue) 0%, var(--darker-blue) 100%);
+    text-align: center;
+}
+
+.contact h2 {
+    color: white;
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.contact p {
+    color: var(--ice-blue);
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.contact-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.contact-buttons .btn-primary,
+.contact-buttons .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.contact-buttons .btn-primary {
+    background: linear-gradient(45deg, var(--ice-blue), #4fc3f7);
+    color: var(--dark-blue);
+}
+
+.contact-buttons .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(135, 206, 235, 0.4);
+}
+
+.contact-buttons .btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.contact-buttons .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+/* Footer */
+.footer {
+    background: var(--darker-blue);
+    padding: 3rem 1rem 1rem 1rem;
+}
+
+.footer-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    margin-bottom: 2rem;
+}
+
+.footer-section h4 {
+    color: white;
     margin-bottom: 1rem;
     font-size: 1.1rem;
 }
 
-.faq-item p {
-    color: rgba(255, 255, 255, 0.8);
+.footer-section p {
+    color: var(--ice-blue);
     line-height: 1.6;
+}
+
+.footer-section a {
+    display: block;
+    color: var(--ice-blue);
+    text-decoration: none;
+    margin-bottom: 0.5rem;
+    transition: color 0.3s ease;
+}
+
+.footer-section a:hover {
+    color: white;
+}
+
+.footer-bottom {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 1rem;
+    text-align: center;
+}
+
+.footer-bottom p {
+    color: rgba(255, 255, 255, 0.6);
     margin: 0;
 }
 
@@ -1284,6 +1696,80 @@ body {
 @media (max-width: 768px) {
     .pricing {
         padding: 4rem 1rem;
+    }
+    
+    .pricing-hero .hero-content h1 {
+        font-size: 2.5rem;
+    }
+    
+    .comparison-header,
+    .feature-row,
+    .feature-cta-row {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+    
+    .comparison-header {
+        text-align: center;
+    }
+    
+    .plan-column {
+        border-top: 1px solid rgba(135, 206, 235, 0.3);
+        padding-top: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .plan-column:first-of-type {
+        border-top: none;
+        margin-top: 0;
+        padding-top: 0;
+    }
+    
+    .feature-row {
+        text-align: center;
+        padding: 0.75rem;
+    }
+    
+    .feature-name {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    
+    .feature-check {
+        margin: 0.25rem 0;
+    }
+    
+    .feature-cta .btn-pricing {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+    
+    .contact-buttons {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .contact-buttons .btn-primary,
+    .contact-buttons .btn-secondary {
+        width: 200px;
+        justify-content: center;
+    }
+    
+    .use-cases {
+        padding: 4rem 1rem;
+    }
+    
+    .use-cases h2 {
+        font-size: 2rem;
+    }
+    
+    .use-cases-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+    
+    .use-case-card.featured {
+        transform: none;
     }
     
     .pricing-grid {
