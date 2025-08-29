@@ -1,0 +1,6 @@
+- Limit the Threat Intel to 1 threat intel feed for all databases and no exceptions for open source / community
+- Look over /workspace/license-server folder
+- Add in ArticDBM as a product into license-server
+- Commit and push license-server git repo
+- Make it so unlimited threat intel feeds and bypasses per database for enterprise version once the user provides a license and it checks if that license has articdbm enterprise license - it should check randomly between 45 and 180 seconds to make sure the license still has access, it should keep this status in the database - that way when the server first starts it works if the license was previously validated
+- Update website in ArticDBM with this new Enterprise tier as well as the embedded license, it is $5 per database per month

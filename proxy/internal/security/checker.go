@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -22,6 +23,26 @@ type BlockedDatabase struct {
 	Pattern string `json:"pattern"`
 	Reason  string `json:"reason"`
 	Active  bool   `json:"active"`
+}
+
+type ThreatIndicator struct {
+	ID          int      `json:"id"`
+	Type        string   `json:"type"`
+	Value       string   `json:"value"`
+	ThreatLevel string   `json:"threat_level"`
+	Confidence  int      `json:"confidence"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+	Action      string   `json:"action"`
+}
+
+type DatabaseSecurityConfig struct {
+	SecurityBlocksEnabled     bool   `json:"security_blocks_enabled"`
+	ThreatIntelBlocksEnabled  bool   `json:"threat_intel_blocks_enabled"`
+	SQLInjectionDetection     bool   `json:"sql_injection_detection"`
+	AuditLogging             bool   `json:"audit_logging"`
+	BlockDefaultResources    bool   `json:"block_default_resources"`
+	ThreatIntelAction        string `json:"threat_intel_action"`
 }
 
 // DefaultBlockedResources contains comprehensive lists of default databases and accounts to block
@@ -397,6 +418,169 @@ func (c *SQLChecker) IsSQLInjectionWithDetails(query string) (bool, string, stri
 	}
 
 	return false, "", ""
+}
+
+// CheckThreatIntel checks query, IP, and other indicators against threat intelligence
+func (c *SQLChecker) CheckThreatIntel(ctx context.Context, database string, sourceIP string, query string, username string) (bool, *ThreatIndicator, string) {
+	if c.redis == nil {
+		return false, nil, ""
+	}
+
+	// First check if threat intel blocking is enabled for this database
+	configData, err := c.redis.Get(ctx, "articdbm:database_security_configs").Result()
+	if err != nil {
+		// If no config found, default to enabled
+		return c.checkThreatIndicators(ctx, sourceIP, query, username)
+	}
+
+	var configs map[string]DatabaseSecurityConfig
+	if err := json.Unmarshal([]byte(configData), &configs); err != nil {
+		return c.checkThreatIndicators(ctx, sourceIP, query, username)
+	}
+
+	// Check if this database has threat intel blocks enabled
+	if config, exists := configs[database]; exists {
+		if !config.ThreatIntelBlocksEnabled {
+			return false, nil, ""
+		}
+	}
+
+	return c.checkThreatIndicators(ctx, sourceIP, query, username)
+}
+
+func (c *SQLChecker) checkThreatIndicators(ctx context.Context, sourceIP string, query string, username string) (bool, *ThreatIndicator, string) {
+	// Get threat indicators from Redis
+	indicatorData, err := c.redis.Get(ctx, "articdbm:threat_indicators").Result()
+	if err != nil {
+		return false, nil, ""
+	}
+
+	var indicators map[string]ThreatIndicator
+	if err := json.Unmarshal([]byte(indicatorData), &indicators); err != nil {
+		return false, nil, ""
+	}
+
+	queryLower := strings.ToLower(query)
+
+	// Check various indicator types
+	for _, indicator := range indicators {
+		matched := false
+		matchReason := ""
+
+		switch indicator.Type {
+		case "ip":
+			if sourceIP == indicator.Value {
+				matched = true
+				matchReason = fmt.Sprintf("Source IP %s matches threat indicator", sourceIP)
+			}
+		
+		case "sql_pattern":
+			if strings.Contains(queryLower, strings.ToLower(indicator.Value)) {
+				matched = true
+				matchReason = fmt.Sprintf("Query contains threat pattern: %s", indicator.Value)
+			}
+		
+		case "pattern":
+			// Generic pattern matching
+			if pattern, err := regexp.Compile(indicator.Value); err == nil {
+				if pattern.MatchString(queryLower) {
+					matched = true
+					matchReason = fmt.Sprintf("Query matches threat pattern: %s", indicator.Value)
+				}
+			}
+		
+		case "user_agent":
+			// This would need to be passed in from the connection context
+			// For now, skip user agent checks
+			
+		case "domain", "url":
+			// Check if query contains the indicator value
+			if strings.Contains(queryLower, strings.ToLower(indicator.Value)) {
+				matched = true
+				matchReason = fmt.Sprintf("Query contains threat indicator: %s", indicator.Value)
+			}
+			
+		case "email":
+			if strings.EqualFold(username, indicator.Value) {
+				matched = true
+				matchReason = fmt.Sprintf("Username %s matches threat indicator", username)
+			}
+		}
+
+		if matched {
+			// Record the match
+			c.recordThreatMatch(ctx, &indicator, database, username, sourceIP, query, matchReason)
+			return true, &indicator, matchReason
+		}
+	}
+
+	return false, nil, ""
+}
+
+func (c *SQLChecker) recordThreatMatch(ctx context.Context, indicator *ThreatIndicator, database, username, sourceIP, query, matchDetails string) {
+	// In a production environment, this would write to the database
+	// For now, we'll log it to Redis for the manager to pick up
+	
+	matchData := map[string]interface{}{
+		"indicator_id":    indicator.ID,
+		"indicator_type":  indicator.Type,
+		"indicator_value": indicator.Value,
+		"threat_level":   indicator.ThreatLevel,
+		"database":       database,
+		"username":       username,
+		"source_ip":      sourceIP,
+		"query":          query,
+		"match_details":  matchDetails,
+		"timestamp":      fmt.Sprintf("%d", time.Now().Unix()),
+		"action_taken":   "blocked",
+	}
+	
+	data, _ := json.Marshal(matchData)
+	key := fmt.Sprintf("articdbm:threat_match:%d", time.Now().UnixNano())
+	c.redis.Set(ctx, key, string(data), 24*time.Hour)
+	
+	// Also increment match counter for the indicator
+	counterKey := fmt.Sprintf("articdbm:threat_indicator_matches:%d", indicator.ID)
+	c.redis.Incr(ctx, counterKey)
+}
+
+// GetDatabaseSecurityConfig retrieves security configuration for a specific database
+func (c *SQLChecker) GetDatabaseSecurityConfig(ctx context.Context, database string) (*DatabaseSecurityConfig, error) {
+	if c.redis == nil {
+		return nil, fmt.Errorf("redis client not initialized")
+	}
+
+	configData, err := c.redis.Get(ctx, "articdbm:database_security_configs").Result()
+	if err != nil {
+		// Return default config if not found
+		return &DatabaseSecurityConfig{
+			SecurityBlocksEnabled:    true,
+			ThreatIntelBlocksEnabled: true,
+			SQLInjectionDetection:    true,
+			AuditLogging:            true,
+			BlockDefaultResources:   true,
+			ThreatIntelAction:       "block",
+		}, nil
+	}
+
+	var configs map[string]DatabaseSecurityConfig
+	if err := json.Unmarshal([]byte(configData), &configs); err != nil {
+		return nil, err
+	}
+
+	if config, exists := configs[database]; exists {
+		return &config, nil
+	}
+
+	// Return default config if database not found
+	return &DatabaseSecurityConfig{
+		SecurityBlocksEnabled:    true,
+		ThreatIntelBlocksEnabled: true,
+		SQLInjectionDetection:    true,
+		AuditLogging:            true,
+		BlockDefaultResources:   true,
+		ThreatIntelAction:       "block",
+	}, nil
 }
 
 func IsWriteQuery(query string) bool {

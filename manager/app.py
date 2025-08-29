@@ -7,9 +7,12 @@ import re
 import uuid
 import tempfile
 import shutil
+import xml.etree.ElementTree as ET
+import yaml
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from pathlib import Path
+from io import StringIO
 
 from py4web import action, request, response, abort, Session, Cache, DAL, Field
 from py4web.utils.cors import CORS
@@ -19,6 +22,7 @@ from pydal.validators import *
 import redis.asyncio as aioredis
 import redis
 from pydantic import BaseModel, Field as PydanticField
+import requests
 
 db = DAL(
     os.getenv("DATABASE_URL", "postgresql://articdbm:articdbm@postgres/articdbm"),
@@ -155,6 +159,65 @@ db.define_table(
     Field('created_at', 'datetime', default=datetime.utcnow)
 )
 
+db.define_table(
+    'threat_intel_feed',
+    Field('name', 'string', required=True, unique=True),
+    Field('type', 'string', requires=IS_IN_SET(['stix', 'taxii', 'openioc', 'misp', 'custom'])),
+    Field('url', 'string'),
+    Field('api_key', 'string'),
+    Field('username', 'string'),
+    Field('password', 'string'),
+    Field('polling_interval', 'integer', default=3600),
+    Field('last_polled', 'datetime'),
+    Field('active', 'boolean', default=True),
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    Field('updated_at', 'datetime', update=datetime.utcnow)
+)
+
+db.define_table(
+    'threat_intel_indicator',
+    Field('feed_id', 'reference threat_intel_feed'),
+    Field('indicator_type', 'string', requires=IS_IN_SET(['ip', 'domain', 'url', 'hash', 'email', 'pattern', 'sql_pattern', 'user_agent'])),
+    Field('value', 'string', required=True),
+    Field('threat_level', 'string', requires=IS_IN_SET(['info', 'low', 'medium', 'high', 'critical'])),
+    Field('confidence', 'integer', default=50),
+    Field('description', 'text'),
+    Field('tags', 'list:string'),
+    Field('first_seen', 'datetime', default=datetime.utcnow),
+    Field('last_seen', 'datetime', default=datetime.utcnow),
+    Field('expires', 'datetime'),
+    Field('active', 'boolean', default=True),
+    Field('matched_count', 'integer', default=0),
+    Field('created_at', 'datetime', default=datetime.utcnow)
+)
+
+db.define_table(
+    'database_security_config',
+    Field('database_id', 'reference managed_database', required=True, unique=True),
+    Field('security_blocks_enabled', 'boolean', default=True),
+    Field('threat_intel_blocks_enabled', 'boolean', default=True),
+    Field('sql_injection_detection', 'boolean', default=True),
+    Field('audit_logging', 'boolean', default=True),
+    Field('block_default_resources', 'boolean', default=True),
+    Field('threat_intel_action', 'string', requires=IS_IN_SET(['block', 'alert', 'log']), default='block'),
+    Field('custom_rules', 'text'),
+    Field('whitelist_patterns', 'text'),
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    Field('updated_at', 'datetime', update=datetime.utcnow)
+)
+
+db.define_table(
+    'threat_intel_match',
+    Field('indicator_id', 'reference threat_intel_indicator', required=True),
+    Field('database_name', 'string'),
+    Field('user_id', 'reference auth_user'),
+    Field('source_ip', 'string'),
+    Field('query', 'text'),
+    Field('action_taken', 'string', requires=IS_IN_SET(['blocked', 'alerted', 'logged'])),
+    Field('match_details', 'text'),
+    Field('timestamp', 'datetime', default=datetime.utcnow)
+)
+
 class DatabaseServerModel(BaseModel):
     name: str
     type: str
@@ -203,6 +266,326 @@ class BlockedDatabaseModel(BaseModel):
     pattern: str
     reason: Optional[str] = None
     active: bool = True
+
+class ThreatIntelFeedModel(BaseModel):
+    name: str
+    type: str
+    url: Optional[str] = None
+    api_key: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    polling_interval: int = 3600
+    active: bool = True
+
+class ThreatIntelIndicatorModel(BaseModel):
+    feed_id: Optional[int] = None
+    indicator_type: str
+    value: str
+    threat_level: str = 'medium'
+    confidence: int = 50
+    description: Optional[str] = None
+    tags: List[str] = []
+    expires: Optional[datetime] = None
+    active: bool = True
+
+class DatabaseSecurityConfigModel(BaseModel):
+    database_id: int
+    security_blocks_enabled: bool = True
+    threat_intel_blocks_enabled: bool = True
+    sql_injection_detection: bool = True
+    audit_logging: bool = True
+    block_default_resources: bool = True
+    threat_intel_action: str = 'block'
+    custom_rules: Optional[str] = None
+    whitelist_patterns: Optional[str] = None
+
+def parse_stix_indicators(stix_content: str) -> List[Dict[str, Any]]:
+    """Parse STIX 2.x JSON format for threat indicators"""
+    indicators = []
+    try:
+        stix_data = json.loads(stix_content)
+        
+        for obj in stix_data.get('objects', []):
+            if obj.get('type') == 'indicator':
+                pattern = obj.get('pattern', '')
+                
+                indicator = {
+                    'indicator_type': 'pattern',
+                    'value': pattern,
+                    'description': obj.get('description', ''),
+                    'threat_level': 'medium',
+                    'confidence': 75,
+                    'tags': obj.get('labels', []),
+                    'first_seen': obj.get('created'),
+                    'expires': obj.get('valid_until')
+                }
+                
+                if '[ipv4-addr:value =' in pattern:
+                    match = re.search(r"\[ipv4-addr:value = '([^']+)'\]", pattern)
+                    if match:
+                        indicator['indicator_type'] = 'ip'
+                        indicator['value'] = match.group(1)
+                elif '[domain-name:value =' in pattern:
+                    match = re.search(r"\[domain-name:value = '([^']+)'\]", pattern)
+                    if match:
+                        indicator['indicator_type'] = 'domain'
+                        indicator['value'] = match.group(1)
+                elif '[url:value =' in pattern:
+                    match = re.search(r"\[url:value = '([^']+)'\]", pattern)
+                    if match:
+                        indicator['indicator_type'] = 'url'
+                        indicator['value'] = match.group(1)
+                elif '[file:hashes.' in pattern:
+                    match = re.search(r"\[file:hashes\.[\w]+\s*=\s*'([^']+)'\]", pattern)
+                    if match:
+                        indicator['indicator_type'] = 'hash'
+                        indicator['value'] = match.group(1)
+                
+                if 'kill_chain_phases' in obj:
+                    phases = [phase.get('phase_name', '') for phase in obj['kill_chain_phases']]
+                    indicator['tags'].extend(phases)
+                
+                severity_map = {
+                    'low': 'low',
+                    'medium': 'medium', 
+                    'high': 'high',
+                    'critical': 'critical'
+                }
+                for label in obj.get('labels', []):
+                    if label.lower() in severity_map:
+                        indicator['threat_level'] = severity_map[label.lower()]
+                
+                indicators.append(indicator)
+                
+            elif obj.get('type') == 'malware':
+                indicator = {
+                    'indicator_type': 'pattern',
+                    'value': obj.get('name', 'unknown'),
+                    'description': f"Malware: {obj.get('description', '')}",
+                    'threat_level': 'high',
+                    'confidence': 80,
+                    'tags': obj.get('labels', []) + ['malware'],
+                    'first_seen': obj.get('created')
+                }
+                indicators.append(indicator)
+                
+            elif obj.get('type') == 'threat-actor':
+                indicator = {
+                    'indicator_type': 'pattern',
+                    'value': obj.get('name', 'unknown'),
+                    'description': f"Threat Actor: {obj.get('description', '')}",
+                    'threat_level': 'high',
+                    'confidence': 70,
+                    'tags': obj.get('labels', []) + ['threat-actor'],
+                    'first_seen': obj.get('created')
+                }
+                indicators.append(indicator)
+                
+    except json.JSONDecodeError as e:
+        print(f"Error parsing STIX JSON: {e}")
+    except Exception as e:
+        print(f"Error processing STIX data: {e}")
+    
+    return indicators
+
+def parse_taxii_feed(taxii_url: str, username: str = None, password: str = None, api_key: str = None) -> List[Dict[str, Any]]:
+    """Fetch and parse TAXII 2.x feed"""
+    indicators = []
+    try:
+        headers = {
+            'Accept': 'application/taxii+json;version=2.1',
+            'Content-Type': 'application/taxii+json;version=2.1'
+        }
+        
+        if api_key:
+            headers['Authorization'] = f'Bearer {api_key}'
+        
+        auth = None
+        if username and password:
+            auth = (username, password)
+        
+        response = requests.get(taxii_url, headers=headers, auth=auth, timeout=30)
+        response.raise_for_status()
+        
+        taxii_data = response.json()
+        
+        if 'objects' in taxii_data:
+            stix_content = json.dumps(taxii_data)
+            indicators = parse_stix_indicators(stix_content)
+        else:
+            collections = taxii_data.get('collections', [])
+            for collection in collections:
+                collection_url = f"{taxii_url}/collections/{collection['id']}/objects"
+                coll_response = requests.get(collection_url, headers=headers, auth=auth, timeout=30)
+                if coll_response.status_code == 200:
+                    coll_data = coll_response.json()
+                    stix_content = json.dumps(coll_data)
+                    indicators.extend(parse_stix_indicators(stix_content))
+                    
+    except requests.RequestException as e:
+        print(f"Error fetching TAXII feed: {e}")
+    except Exception as e:
+        print(f"Error processing TAXII data: {e}")
+    
+    return indicators
+
+def parse_openioc_indicators(openioc_content: str) -> List[Dict[str, Any]]:
+    """Parse OpenIOC 1.1 XML format for threat indicators"""
+    indicators = []
+    try:
+        root = ET.fromstring(openioc_content)
+        
+        ns = {'ioc': 'http://openioc.org/schemas/OpenIOC_1.1'}
+        
+        ioc_id = root.get('id', 'unknown')
+        description = root.findtext('.//ioc:short_description', '', ns) or \
+                     root.findtext('.//ioc:description', '', ns)
+        
+        for indicator_item in root.findall('.//ioc:IndicatorItem', ns):
+            context = indicator_item.find('.//ioc:Context', ns)
+            content = indicator_item.find('.//ioc:Content', ns)
+            
+            if context is not None and content is not None:
+                context_type = context.get('search', '').lower()
+                value = content.text
+                
+                if not value:
+                    continue
+                
+                indicator_type = 'pattern'
+                
+                if 'ipv4' in context_type or 'remoteip' in context_type:
+                    indicator_type = 'ip'
+                elif 'hostname' in context_type or 'dns' in context_type:
+                    indicator_type = 'domain'
+                elif 'url' in context_type or 'uri' in context_type:
+                    indicator_type = 'url'
+                elif 'md5' in context_type or 'sha' in context_type or 'hash' in context_type:
+                    indicator_type = 'hash'
+                elif 'email' in context_type:
+                    indicator_type = 'email'
+                elif 'useragent' in context_type:
+                    indicator_type = 'user_agent'
+                elif 'sql' in context_type or 'query' in context_type:
+                    indicator_type = 'sql_pattern'
+                
+                indicator = {
+                    'indicator_type': indicator_type,
+                    'value': value,
+                    'description': f"{description} (IOC: {ioc_id})",
+                    'threat_level': 'medium',
+                    'confidence': 60,
+                    'tags': ['openioc'],
+                    'first_seen': datetime.utcnow()
+                }
+                
+                indicators.append(indicator)
+        
+        for link in root.findall('.//ioc:link', ns):
+            rel = link.get('rel', '')
+            if rel == 'category':
+                category = link.text
+                for indicator in indicators:
+                    indicator['tags'].append(category)
+                    
+    except ET.ParseError as e:
+        print(f"Error parsing OpenIOC XML: {e}")
+    except Exception as e:
+        print(f"Error processing OpenIOC data: {e}")
+    
+    return indicators
+
+def parse_misp_event(misp_content: str) -> List[Dict[str, Any]]:
+    """Parse MISP event JSON format for threat indicators"""
+    indicators = []
+    try:
+        misp_data = json.loads(misp_content)
+        
+        event = misp_data.get('Event', misp_data)
+        
+        threat_level_map = {
+            '1': 'critical',
+            '2': 'high',
+            '3': 'medium',
+            '4': 'low'
+        }
+        
+        event_threat_level = threat_level_map.get(str(event.get('threat_level_id', '3')), 'medium')
+        event_tags = [tag.get('name', '') for tag in event.get('Tag', [])]
+        
+        for attribute in event.get('Attribute', []):
+            attr_type = attribute.get('type', '').lower()
+            value = attribute.get('value', '')
+            
+            if not value:
+                continue
+            
+            indicator_type = 'pattern'
+            
+            if attr_type in ['ip-src', 'ip-dst', 'ip']:
+                indicator_type = 'ip'
+            elif attr_type in ['domain', 'hostname']:
+                indicator_type = 'domain'
+            elif attr_type in ['url', 'uri']:
+                indicator_type = 'url'
+            elif attr_type in ['md5', 'sha1', 'sha256', 'sha512', 'hash']:
+                indicator_type = 'hash'
+            elif attr_type in ['email', 'email-src', 'email-dst']:
+                indicator_type = 'email'
+            elif attr_type == 'user-agent':
+                indicator_type = 'user_agent'
+            
+            indicator = {
+                'indicator_type': indicator_type,
+                'value': value,
+                'description': attribute.get('comment', '') or event.get('info', ''),
+                'threat_level': event_threat_level,
+                'confidence': 100 if attribute.get('to_ids', False) else 50,
+                'tags': event_tags + [attr_type, 'misp'],
+                'first_seen': attribute.get('timestamp'),
+                'expires': None
+            }
+            
+            indicators.append(indicator)
+        
+        for obj in event.get('Object', []):
+            for attribute in obj.get('Attribute', []):
+                attr_type = attribute.get('type', '').lower()
+                value = attribute.get('value', '')
+                
+                if not value:
+                    continue
+                
+                indicator_type = 'pattern'
+                
+                if attr_type in ['ip-src', 'ip-dst', 'ip']:
+                    indicator_type = 'ip'
+                elif attr_type in ['domain', 'hostname']:
+                    indicator_type = 'domain'
+                elif attr_type in ['url', 'uri']:
+                    indicator_type = 'url'
+                elif attr_type in ['md5', 'sha1', 'sha256', 'sha512']:
+                    indicator_type = 'hash'
+                
+                indicator = {
+                    'indicator_type': indicator_type,
+                    'value': value,
+                    'description': f"{obj.get('name', 'Object')}: {attribute.get('comment', '')}",
+                    'threat_level': event_threat_level,
+                    'confidence': 75,
+                    'tags': event_tags + [attr_type, 'misp', obj.get('name', '')],
+                    'first_seen': attribute.get('timestamp'),
+                    'expires': None
+                }
+                
+                indicators.append(indicator)
+                
+    except json.JSONDecodeError as e:
+        print(f"Error parsing MISP JSON: {e}")
+    except Exception as e:
+        print(f"Error processing MISP data: {e}")
+    
+    return indicators
 
 def validate_sql_security(content: str) -> Dict[str, any]:
     """Comprehensive SQL security validation"""
@@ -1086,6 +1469,9 @@ def sync_to_redis():
         redis_client.expire('articdbm:blocked_databases', 300)
         redis_client.expire('articdbm:managed_databases', 300)
         
+        # Also sync threat intelligence data
+        sync_threat_intel_to_redis()
+        
         return True
     except Exception as e:
         print(f"Error syncing to Redis: {e}")
@@ -1255,6 +1641,472 @@ def update_blocking_config():
         return {'message': 'Blocking configuration updated successfully'}
     except Exception as e:
         abort(400, str(e))
+
+# Threat Intelligence API Endpoints
+
+@action('api/threat-intel/feeds', method=['GET'])
+@action.uses(auth, cors)
+def get_threat_intel_feeds():
+    feeds = db(db.threat_intel_feed.active == True).select()
+    result = []
+    for feed in feeds:
+        indicator_count = db(db.threat_intel_indicator.feed_id == feed.id).count()
+        result.append({
+            'id': feed.id,
+            'name': feed.name,
+            'type': feed.type,
+            'url': feed.url,
+            'polling_interval': feed.polling_interval,
+            'last_polled': feed.last_polled.isoformat() if feed.last_polled else None,
+            'active': feed.active,
+            'indicator_count': indicator_count,
+            'created_at': feed.created_at.isoformat()
+        })
+    return {'feeds': result}
+
+@action('api/threat-intel/feeds', method=['POST'])
+@action.uses(auth, cors, db)
+def create_threat_intel_feed():
+    try:
+        data = request.json
+        feed = ThreatIntelFeedModel(**data)
+        
+        feed_id = db.threat_intel_feed.insert(
+            name=feed.name,
+            type=feed.type,
+            url=feed.url,
+            api_key=feed.api_key,
+            username=feed.username,
+            password=feed.password,
+            polling_interval=feed.polling_interval,
+            active=feed.active
+        )
+        
+        db.audit_log.insert(
+            user_id=auth.user_id,
+            action='create_threat_intel_feed',
+            database_name=feed.name,
+            query=f"Created {feed.type} feed: {feed.name}",
+            result='success',
+            ip_address=request.environ.get('REMOTE_ADDR')
+        )
+        
+        return {'id': feed_id, 'message': 'Threat intelligence feed created successfully'}
+    except Exception as e:
+        abort(400, str(e))
+
+@action('api/threat-intel/feeds/<feed_id:int>/poll', method=['POST'])
+@action.uses(auth, cors, db)
+def poll_threat_intel_feed(feed_id):
+    try:
+        feed = db.threat_intel_feed[feed_id]
+        if not feed:
+            abort(404, 'Feed not found')
+        
+        indicators = []
+        
+        if feed.type == 'taxii':
+            indicators = parse_taxii_feed(feed.url, feed.username, feed.password, feed.api_key)
+        elif feed.type == 'stix':
+            if feed.url:
+                response = requests.get(feed.url, timeout=30)
+                indicators = parse_stix_indicators(response.text)
+        elif feed.type == 'openioc':
+            if feed.url:
+                response = requests.get(feed.url, timeout=30)
+                indicators = parse_openioc_indicators(response.text)
+        elif feed.type == 'misp':
+            if feed.url:
+                headers = {}
+                if feed.api_key:
+                    headers['Authorization'] = feed.api_key
+                response = requests.get(feed.url, headers=headers, timeout=30)
+                indicators = parse_misp_event(response.text)
+        
+        added_count = 0
+        updated_count = 0
+        
+        for indicator in indicators:
+            existing = db(
+                (db.threat_intel_indicator.value == indicator['value']) &
+                (db.threat_intel_indicator.indicator_type == indicator['indicator_type'])
+            ).select().first()
+            
+            if existing:
+                existing.update_record(
+                    last_seen=datetime.utcnow(),
+                    threat_level=indicator.get('threat_level', existing.threat_level),
+                    confidence=max(existing.confidence, indicator.get('confidence', 50)),
+                    active=True
+                )
+                updated_count += 1
+            else:
+                db.threat_intel_indicator.insert(
+                    feed_id=feed_id,
+                    indicator_type=indicator['indicator_type'],
+                    value=indicator['value'],
+                    threat_level=indicator.get('threat_level', 'medium'),
+                    confidence=indicator.get('confidence', 50),
+                    description=indicator.get('description', ''),
+                    tags=indicator.get('tags', []),
+                    first_seen=indicator.get('first_seen', datetime.utcnow()),
+                    last_seen=datetime.utcnow(),
+                    expires=indicator.get('expires'),
+                    active=True
+                )
+                added_count += 1
+        
+        feed.update_record(last_polled=datetime.utcnow())
+        
+        db.audit_log.insert(
+            user_id=auth.user_id,
+            action='poll_threat_intel_feed',
+            database_name=feed.name,
+            query=f"Polled {feed.type} feed",
+            result=f"Added {added_count}, Updated {updated_count} indicators",
+            ip_address=request.environ.get('REMOTE_ADDR')
+        )
+        
+        sync_threat_intel_to_redis()
+        
+        return {
+            'message': 'Feed polled successfully',
+            'added': added_count,
+            'updated': updated_count,
+            'total': added_count + updated_count
+        }
+    except Exception as e:
+        abort(400, str(e))
+
+@action('api/threat-intel/indicators', method=['GET'])
+@action.uses(auth, cors)
+def get_threat_intel_indicators():
+    limit = request.params.get('limit', 100)
+    offset = request.params.get('offset', 0)
+    indicator_type = request.params.get('type')
+    threat_level = request.params.get('threat_level')
+    
+    query = db(db.threat_intel_indicator.active == True)
+    
+    if indicator_type:
+        query = query & (db.threat_intel_indicator.indicator_type == indicator_type)
+    if threat_level:
+        query = query & (db.threat_intel_indicator.threat_level == threat_level)
+    
+    indicators = query.select(
+        limitby=(int(offset), int(offset) + int(limit)),
+        orderby=~db.threat_intel_indicator.last_seen
+    )
+    
+    result = []
+    for indicator in indicators:
+        feed = db.threat_intel_feed[indicator.feed_id] if indicator.feed_id else None
+        result.append({
+            'id': indicator.id,
+            'feed_name': feed.name if feed else 'Manual',
+            'indicator_type': indicator.indicator_type,
+            'value': indicator.value,
+            'threat_level': indicator.threat_level,
+            'confidence': indicator.confidence,
+            'description': indicator.description,
+            'tags': indicator.tags,
+            'matched_count': indicator.matched_count,
+            'first_seen': indicator.first_seen.isoformat(),
+            'last_seen': indicator.last_seen.isoformat(),
+            'expires': indicator.expires.isoformat() if indicator.expires else None,
+            'active': indicator.active
+        })
+    
+    total = query.count()
+    
+    return {'indicators': result, 'total': total}
+
+@action('api/threat-intel/indicators', method=['POST'])
+@action.uses(auth, cors, db)
+def create_threat_intel_indicator():
+    try:
+        data = request.json
+        indicator = ThreatIntelIndicatorModel(**data)
+        
+        indicator_id = db.threat_intel_indicator.insert(
+            feed_id=indicator.feed_id,
+            indicator_type=indicator.indicator_type,
+            value=indicator.value,
+            threat_level=indicator.threat_level,
+            confidence=indicator.confidence,
+            description=indicator.description,
+            tags=indicator.tags,
+            expires=indicator.expires,
+            active=indicator.active
+        )
+        
+        db.audit_log.insert(
+            user_id=auth.user_id,
+            action='create_threat_intel_indicator',
+            query=f"Added {indicator.indicator_type}: {indicator.value}",
+            result='success',
+            ip_address=request.environ.get('REMOTE_ADDR')
+        )
+        
+        sync_threat_intel_to_redis()
+        
+        return {'id': indicator_id, 'message': 'Threat indicator created successfully'}
+    except Exception as e:
+        abort(400, str(e))
+
+@action('api/threat-intel/indicators/<indicator_id:int>', method=['DELETE'])
+@action.uses(auth, cors, db)
+def delete_threat_intel_indicator(indicator_id):
+    try:
+        indicator = db.threat_intel_indicator[indicator_id]
+        if not indicator:
+            abort(404, 'Indicator not found')
+        
+        indicator.update_record(active=False)
+        
+        db.audit_log.insert(
+            user_id=auth.user_id,
+            action='delete_threat_intel_indicator',
+            query=f"Deleted {indicator.indicator_type}: {indicator.value}",
+            result='success',
+            ip_address=request.environ.get('REMOTE_ADDR')
+        )
+        
+        sync_threat_intel_to_redis()
+        
+        return {'message': 'Threat indicator deleted successfully'}
+    except Exception as e:
+        abort(400, str(e))
+
+@action('api/threat-intel/import', method=['POST'])
+@action.uses(auth, cors, db)
+def import_threat_intel():
+    try:
+        data = request.json
+        feed_type = data.get('type', 'stix')
+        content = data.get('content', '')
+        feed_name = data.get('feed_name', f'Manual Import - {datetime.utcnow().isoformat()}')
+        
+        indicators = []
+        
+        if feed_type == 'stix':
+            indicators = parse_stix_indicators(content)
+        elif feed_type == 'openioc':
+            indicators = parse_openioc_indicators(content)
+        elif feed_type == 'misp':
+            indicators = parse_misp_event(content)
+        else:
+            abort(400, f'Unsupported feed type: {feed_type}')
+        
+        feed_id = db.threat_intel_feed.insert(
+            name=feed_name,
+            type=feed_type,
+            url=None,
+            active=True,
+            last_polled=datetime.utcnow()
+        )
+        
+        added_count = 0
+        for indicator in indicators:
+            db.threat_intel_indicator.insert(
+                feed_id=feed_id,
+                indicator_type=indicator['indicator_type'],
+                value=indicator['value'],
+                threat_level=indicator.get('threat_level', 'medium'),
+                confidence=indicator.get('confidence', 50),
+                description=indicator.get('description', ''),
+                tags=indicator.get('tags', []),
+                first_seen=indicator.get('first_seen', datetime.utcnow()),
+                last_seen=datetime.utcnow(),
+                expires=indicator.get('expires'),
+                active=True
+            )
+            added_count += 1
+        
+        db.audit_log.insert(
+            user_id=auth.user_id,
+            action='import_threat_intel',
+            database_name=feed_name,
+            query=f"Imported {feed_type} data",
+            result=f"Added {added_count} indicators",
+            ip_address=request.environ.get('REMOTE_ADDR')
+        )
+        
+        sync_threat_intel_to_redis()
+        
+        return {
+            'message': 'Threat intelligence imported successfully',
+            'feed_id': feed_id,
+            'indicators_added': added_count
+        }
+    except Exception as e:
+        abort(400, str(e))
+
+@action('api/threat-intel/matches', method=['GET'])
+@action.uses(auth, cors)
+def get_threat_intel_matches():
+    limit = request.params.get('limit', 100)
+    offset = request.params.get('offset', 0)
+    
+    matches = db(db.threat_intel_match).select(
+        limitby=(int(offset), int(offset) + int(limit)),
+        orderby=~db.threat_intel_match.timestamp
+    )
+    
+    result = []
+    for match in matches:
+        indicator = db.threat_intel_indicator[match.indicator_id]
+        user = db.auth_user[match.user_id] if match.user_id else None
+        result.append({
+            'id': match.id,
+            'indicator_type': indicator.indicator_type if indicator else 'unknown',
+            'indicator_value': indicator.value if indicator else 'unknown',
+            'threat_level': indicator.threat_level if indicator else 'unknown',
+            'database_name': match.database_name,
+            'username': user.email if user else 'System',
+            'source_ip': match.source_ip,
+            'query': match.query[:200] if match.query else None,
+            'action_taken': match.action_taken,
+            'match_details': match.match_details,
+            'timestamp': match.timestamp.isoformat()
+        })
+    
+    total = db(db.threat_intel_match).count()
+    
+    return {'matches': result, 'total': total}
+
+# Database Security Configuration API Endpoints
+
+@action('api/databases/<database_id:int>/security-config', method=['GET'])
+@action.uses(auth, cors)
+def get_database_security_config(database_id):
+    database = db.managed_database[database_id]
+    if not database:
+        abort(404, 'Database not found')
+    
+    config = db(db.database_security_config.database_id == database_id).select().first()
+    
+    if not config:
+        config = {
+            'security_blocks_enabled': True,
+            'threat_intel_blocks_enabled': True,
+            'sql_injection_detection': True,
+            'audit_logging': True,
+            'block_default_resources': True,
+            'threat_intel_action': 'block',
+            'custom_rules': None,
+            'whitelist_patterns': None
+        }
+    else:
+        config = {
+            'security_blocks_enabled': config.security_blocks_enabled,
+            'threat_intel_blocks_enabled': config.threat_intel_blocks_enabled,
+            'sql_injection_detection': config.sql_injection_detection,
+            'audit_logging': config.audit_logging,
+            'block_default_resources': config.block_default_resources,
+            'threat_intel_action': config.threat_intel_action,
+            'custom_rules': config.custom_rules,
+            'whitelist_patterns': config.whitelist_patterns
+        }
+    
+    return {
+        'database_name': database.name,
+        'config': config
+    }
+
+@action('api/databases/<database_id:int>/security-config', method=['PUT'])
+@action.uses(auth, cors, db)
+def update_database_security_config(database_id):
+    try:
+        database = db.managed_database[database_id]
+        if not database:
+            abort(404, 'Database not found')
+        
+        data = request.json
+        config_data = DatabaseSecurityConfigModel(database_id=database_id, **data)
+        
+        existing = db(db.database_security_config.database_id == database_id).select().first()
+        
+        if existing:
+            existing.update_record(
+                security_blocks_enabled=config_data.security_blocks_enabled,
+                threat_intel_blocks_enabled=config_data.threat_intel_blocks_enabled,
+                sql_injection_detection=config_data.sql_injection_detection,
+                audit_logging=config_data.audit_logging,
+                block_default_resources=config_data.block_default_resources,
+                threat_intel_action=config_data.threat_intel_action,
+                custom_rules=config_data.custom_rules,
+                whitelist_patterns=config_data.whitelist_patterns
+            )
+        else:
+            db.database_security_config.insert(
+                database_id=database_id,
+                security_blocks_enabled=config_data.security_blocks_enabled,
+                threat_intel_blocks_enabled=config_data.threat_intel_blocks_enabled,
+                sql_injection_detection=config_data.sql_injection_detection,
+                audit_logging=config_data.audit_logging,
+                block_default_resources=config_data.block_default_resources,
+                threat_intel_action=config_data.threat_intel_action,
+                custom_rules=config_data.custom_rules,
+                whitelist_patterns=config_data.whitelist_patterns
+            )
+        
+        db.audit_log.insert(
+            user_id=auth.user_id,
+            action='update_database_security_config',
+            database_name=database.name,
+            query=json.dumps(data),
+            result='success',
+            ip_address=request.environ.get('REMOTE_ADDR')
+        )
+        
+        sync_to_redis()
+        
+        return {'message': 'Security configuration updated successfully'}
+    except Exception as e:
+        abort(400, str(e))
+
+def sync_threat_intel_to_redis():
+    """Sync threat intelligence indicators to Redis for proxy consumption"""
+    try:
+        threat_indicators = {}
+        
+        for indicator in db(db.threat_intel_indicator.active == True).select():
+            key = f"{indicator.indicator_type}:{indicator.value}"
+            threat_indicators[key] = {
+                'id': indicator.id,
+                'type': indicator.indicator_type,
+                'value': indicator.value,
+                'threat_level': indicator.threat_level,
+                'confidence': indicator.confidence,
+                'description': indicator.description,
+                'tags': indicator.tags,
+                'action': 'block'
+            }
+        
+        database_configs = {}
+        for config in db(db.database_security_config).select():
+            database = db.managed_database[config.database_id]
+            if database:
+                database_configs[database.name] = {
+                    'security_blocks_enabled': config.security_blocks_enabled,
+                    'threat_intel_blocks_enabled': config.threat_intel_blocks_enabled,
+                    'sql_injection_detection': config.sql_injection_detection,
+                    'audit_logging': config.audit_logging,
+                    'block_default_resources': config.block_default_resources,
+                    'threat_intel_action': config.threat_intel_action
+                }
+        
+        redis_client.set('articdbm:threat_indicators', json.dumps(threat_indicators))
+        redis_client.set('articdbm:database_security_configs', json.dumps(database_configs))
+        
+        redis_client.expire('articdbm:threat_indicators', 300)
+        redis_client.expire('articdbm:database_security_configs', 300)
+        
+        return True
+    except Exception as e:
+        print(f"Error syncing threat intel to Redis: {e}")
+        return False
 
 if __name__ == "__main__":
     # Seed default blocked resources on startup if needed

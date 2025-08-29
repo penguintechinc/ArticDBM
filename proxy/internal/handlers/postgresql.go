@@ -303,6 +303,21 @@ func (h *PostgreSQLHandler) proxyTraffic(ctx context.Context, client net.Conn, b
 					return
 				}
 
+				// Check threat intelligence indicators
+				sourceIP := client.RemoteAddr().String()
+				if matched, indicator, reason := h.secChecker.CheckThreatIntel(ctx, database, sourceIP, query, username); matched {
+					h.logger.Warn("Threat intelligence match",
+						zap.String("user", username),
+						zap.String("database", database),
+						zap.String("source_ip", sourceIP),
+						zap.String("threat_level", indicator.ThreatLevel),
+						zap.String("reason", reason),
+						zap.String("query", query[:minInt(100, len(query))]))
+					metrics.IncSQLInjection("postgresql") // Use same metric for now
+					h.sendError(client, "Query blocked by threat intelligence: "+reason)
+					return
+				}
+
 				if !h.authManager.Authorize(ctx, username, database, "", h.isWriteQuery(query)) {
 					h.logger.Warn("Unauthorized query",
 						zap.String("user", username),
