@@ -79,7 +79,43 @@ db.define_table(
     Field('table_name', 'string', default='*'),
     Field('actions', 'list:string', default=['read']),
     Field('created_at', 'datetime', default=datetime.utcnow),
-    Field('updated_at', 'datetime', update=datetime.utcnow)
+    Field('updated_at', 'datetime', update=datetime.utcnow),
+    Field('expires_at', 'datetime'),  # Time-limited permissions
+    Field('max_queries', 'integer', default=0),  # 0 = unlimited
+    Field('query_count', 'integer', default=0)   # Track usage
+)
+
+# Enhanced user profiles with security settings
+db.define_table(
+    'user_profile',
+    Field('user_id', 'reference auth_user', unique=True, required=True),
+    Field('api_key', 'string', unique=True),
+    Field('require_tls', 'boolean', default=False),
+    Field('allowed_ips', 'list:string'),  # IP whitelist
+    Field('rate_limit', 'integer', default=0),  # requests per second, 0 = no limit
+    Field('expires_at', 'datetime'),  # Account expiration
+    Field('is_temporary', 'boolean', default=False),
+    Field('created_by', 'reference auth_user'),
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    Field('last_used', 'datetime'),
+    Field('usage_count', 'integer', default=0)
+)
+
+# One-time access tokens for temporary database access
+db.define_table(
+    'temporary_access',
+    Field('token', 'string', unique=True, required=True),
+    Field('database_name', 'string', required=True),
+    Field('table_name', 'string', default='*'),
+    Field('actions', 'list:string', required=True),  # ['read'] or ['write'] or both
+    Field('created_by', 'reference auth_user', required=True),
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    Field('expires_at', 'datetime', required=True),
+    Field('max_uses', 'integer', default=1),  # How many times it can be used
+    Field('use_count', 'integer', default=0),
+    Field('last_used', 'datetime'),
+    Field('client_ip', 'string'),  # Restrict to specific IP
+    Field('is_active', 'boolean', default=True)
 )
 
 db.define_table(
@@ -820,6 +856,93 @@ def validate_sql_security(content: str) -> Dict[str, any]:
         'patterns_checked': len(dangerous_patterns) + len(shell_patterns) + len(default_db_patterns)
     }
 
+# ==================== USER MANAGEMENT HELPER FUNCTIONS ====================
+
+def generate_api_key():
+    """Generate a secure API key"""
+    return secrets.token_urlsafe(32)
+
+def generate_temp_token():
+    """Generate a temporary access token"""
+    return f"tmp_{secrets.token_urlsafe(24)}"
+
+def create_user_with_profile(username, email, password, **profile_options):
+    """Create a user with enhanced profile settings"""
+    # Create basic user account
+    user_id = db.auth_user.insert(
+        username=username,
+        email=email,
+        password=auth.password.encrypt(password),
+        first_name=profile_options.get('first_name', ''),
+        last_name=profile_options.get('last_name', '')
+    )
+    
+    # Create enhanced user profile
+    profile_data = {
+        'user_id': user_id,
+        'api_key': generate_api_key(),
+        'require_tls': profile_options.get('require_tls', False),
+        'allowed_ips': profile_options.get('allowed_ips', []),
+        'rate_limit': profile_options.get('rate_limit', 0),
+        'expires_at': profile_options.get('expires_at'),
+        'is_temporary': profile_options.get('is_temporary', False),
+        'created_by': profile_options.get('created_by')
+    }
+    
+    db.user_profile.insert(**profile_data)
+    db.commit()
+    
+    return user_id
+
+def sync_users_to_redis():
+    """Sync enhanced user data to Redis for proxy consumption"""
+    users_data = {}
+    permissions_data = {}
+    
+    # Get all users with profiles
+    query = db.auth_user.id > 0
+    users = db(query).select(db.auth_user.ALL, db.user_profile.ALL,
+                            left=db.user_profile.on(db.auth_user.id == db.user_profile.user_id))
+    
+    for row in users:
+        user = row.auth_user
+        profile = row.user_profile
+        
+        # Build user data for proxy
+        user_data = {
+            'username': user.username,
+            'password_hash': user.password,
+            'enabled': user.registration_key is None,  # py4web auth pattern
+            'api_key': profile.api_key if profile else None,
+            'require_tls': profile.require_tls if profile else False,
+            'allowed_ips': profile.allowed_ips if profile else [],
+            'rate_limit': profile.rate_limit if profile else 0,
+            'expires_at': profile.expires_at.isoformat() if profile and profile.expires_at else None,
+            'created_at': user.registration_created_at.isoformat() if user.registration_created_at else None,
+            'updated_at': user.registration_updated_at.isoformat() if user.registration_updated_at else None
+        }
+        users_data[user.username] = user_data
+    
+    # Get all permissions
+    perms = db(db.user_permission).select()
+    for perm in perms:
+        user = db.auth_user[perm.user_id]
+        perm_data = {
+            'user_id': user.username,
+            'database': perm.database_name,
+            'table': perm.table_name,
+            'actions': perm.actions,
+            'expires_at': perm.expires_at.isoformat() if perm.expires_at else None,
+            'max_queries': perm.max_queries
+        }
+        permissions_data[f"{user.username}:{perm.database_name}"] = perm_data
+    
+    # Store in Redis
+    redis_client.set('articdbm:manager:users', json.dumps(users_data))
+    redis_client.set('articdbm:manager:permissions', json.dumps(permissions_data))
+    
+    return len(users_data), len(permissions_data)
+
 @action('api/health', method=['GET'])
 @cors
 def health():
@@ -967,6 +1090,272 @@ def delete_permission(perm_id):
         sync_to_redis()
         
         return {'message': 'Permission deleted successfully'}
+    except Exception as e:
+        abort(400, str(e))
+
+# ==================== ENHANCED USER MANAGEMENT ENDPOINTS ====================
+
+@action('api/users/enhanced', method=['GET'])
+@action.uses(auth, cors, db)
+def get_enhanced_users():
+    """Get all users with their enhanced profiles and permissions"""
+    try:
+        query = db.auth_user.id > 0
+        users = db(query).select(db.auth_user.ALL, db.user_profile.ALL,
+                                left=db.user_profile.on(db.auth_user.id == db.user_profile.user_id))
+        
+        result = []
+        for row in users:
+            user = row.auth_user
+            profile = row.user_profile
+            
+            # Get user permissions
+            perms = db(db.user_permission.user_id == user.id).select()
+            permissions = []
+            for perm in perms:
+                permissions.append({
+                    'id': perm.id,
+                    'database_name': perm.database_name,
+                    'table_name': perm.table_name,
+                    'actions': perm.actions,
+                    'expires_at': perm.expires_at.isoformat() if perm.expires_at else None,
+                    'max_queries': perm.max_queries,
+                    'query_count': perm.query_count
+                })
+            
+            user_data = {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'enabled': user.registration_key is None,
+                'created_at': user.created_at.isoformat() if user.created_at else None,
+                'profile': {
+                    'api_key': profile.api_key if profile else None,
+                    'require_tls': profile.require_tls if profile else False,
+                    'allowed_ips': profile.allowed_ips if profile else [],
+                    'rate_limit': profile.rate_limit if profile else 0,
+                    'expires_at': profile.expires_at.isoformat() if profile and profile.expires_at else None,
+                    'is_temporary': profile.is_temporary if profile else False,
+                    'last_used': profile.last_used.isoformat() if profile and profile.last_used else None,
+                    'usage_count': profile.usage_count if profile else 0
+                },
+                'permissions': permissions
+            }
+            result.append(user_data)
+        
+        return {'users': result, 'count': len(result)}
+    except Exception as e:
+        abort(500, str(e))
+
+@action('api/users/enhanced', method=['POST'])
+@action.uses(auth, cors, db)
+def create_enhanced_user():
+    """Create a new user with enhanced profile settings"""
+    try:
+        data = request.json
+        
+        # Validate required fields
+        if not data.get('username') or not data.get('email') or not data.get('password'):
+            abort(400, 'Username, email, and password are required')
+        
+        # Check if user exists
+        if db(db.auth_user.username == data['username']).count() > 0:
+            abort(400, 'Username already exists')
+        
+        if db(db.auth_user.email == data['email']).count() > 0:
+            abort(400, 'Email already exists')
+        
+        # Parse expiration dates
+        expires_at = None
+        if data.get('expires_at'):
+            expires_at = datetime.fromisoformat(data['expires_at'].replace('Z', '+00:00'))
+        
+        # Create user with profile
+        user_id = create_user_with_profile(
+            username=data['username'],
+            email=data['email'],
+            password=data['password'],
+            first_name=data.get('first_name', ''),
+            last_name=data.get('last_name', ''),
+            require_tls=data.get('require_tls', False),
+            allowed_ips=data.get('allowed_ips', []),
+            rate_limit=data.get('rate_limit', 0),
+            expires_at=expires_at,
+            is_temporary=data.get('is_temporary', False),
+            created_by=auth.current_user.id if auth.current_user else None
+        )
+        
+        # Create permissions if provided
+        if data.get('permissions'):
+            for perm_data in data['permissions']:
+                perm_expires_at = None
+                if perm_data.get('expires_at'):
+                    perm_expires_at = datetime.fromisoformat(perm_data['expires_at'].replace('Z', '+00:00'))
+                
+                db.user_permission.insert(
+                    user_id=user_id,
+                    database_name=perm_data['database_name'],
+                    table_name=perm_data.get('table_name', '*'),
+                    actions=perm_data.get('actions', ['read']),
+                    expires_at=perm_expires_at,
+                    max_queries=perm_data.get('max_queries', 0)
+                )
+        
+        db.commit()
+        sync_users_to_redis()
+        
+        return {'id': user_id, 'message': 'Enhanced user created successfully'}
+    except Exception as e:
+        abort(400, str(e))
+
+@action('api/users/<user_id:int>/regenerate-api-key', method=['POST'])
+@action.uses(auth, cors, db)
+def regenerate_api_key(user_id):
+    """Regenerate API key for a user"""
+    try:
+        user = db.auth_user[user_id]
+        if not user:
+            abort(404, 'User not found')
+        
+        profile = db(db.user_profile.user_id == user_id).select().first()
+        
+        new_api_key = generate_api_key()
+        
+        if profile:
+            db(db.user_profile.user_id == user_id).update(api_key=new_api_key)
+        else:
+            db.user_profile.insert(user_id=user_id, api_key=new_api_key)
+        
+        db.commit()
+        sync_users_to_redis()
+        
+        return {'api_key': new_api_key, 'message': 'API key regenerated successfully'}
+    except Exception as e:
+        abort(400, str(e))
+
+@action('api/users/<user_id:int>/rate-limit', method=['PUT'])
+@action.uses(auth, cors, db)
+def update_user_rate_limit(user_id):
+    """Update rate limit for a user"""
+    try:
+        user = db.auth_user[user_id]
+        if not user:
+            abort(404, 'User not found')
+        
+        data = request.json
+        rate_limit = data.get('rate_limit', 0)
+        
+        if rate_limit < 0:
+            abort(400, 'Rate limit cannot be negative')
+        
+        profile = db(db.user_profile.user_id == user_id).select().first()
+        
+        if profile:
+            db(db.user_profile.user_id == user_id).update(rate_limit=rate_limit)
+        else:
+            db.user_profile.insert(user_id=user_id, rate_limit=rate_limit)
+        
+        db.commit()
+        sync_users_to_redis()
+        
+        return {'rate_limit': rate_limit, 'message': 'Rate limit updated successfully'}
+    except Exception as e:
+        abort(400, str(e))
+
+@action('api/temporary-access', method=['POST'])
+@action.uses(auth, cors, db)
+def create_temporary_access():
+    """Create a one-time access token for temporary database access"""
+    try:
+        data = request.json
+        
+        # Validate required fields
+        if not data.get('database_name') or not data.get('actions'):
+            abort(400, 'Database name and actions are required')
+        
+        if not data.get('expires_at'):
+            abort(400, 'Expiration time is required')
+        
+        # Parse expiration time
+        expires_at = datetime.fromisoformat(data['expires_at'].replace('Z', '+00:00'))
+        
+        if expires_at <= datetime.utcnow():
+            abort(400, 'Expiration time must be in the future')
+        
+        # Generate token
+        token = generate_temp_token()
+        
+        # Create temporary access
+        temp_id = db.temporary_access.insert(
+            token=token,
+            database_name=data['database_name'],
+            table_name=data.get('table_name', '*'),
+            actions=data['actions'],
+            created_by=auth.current_user.id if auth.current_user else None,
+            expires_at=expires_at,
+            max_uses=data.get('max_uses', 1),
+            client_ip=data.get('client_ip')
+        )
+        
+        db.commit()
+        
+        return {
+            'token': token,
+            'id': temp_id,
+            'expires_at': expires_at.isoformat(),
+            'message': 'Temporary access token created successfully'
+        }
+    except Exception as e:
+        abort(400, str(e))
+
+@action('api/temporary-access', method=['GET'])
+@action.uses(auth, cors, db)
+def get_temporary_access():
+    """Get all temporary access tokens"""
+    try:
+        tokens = db(db.temporary_access.is_active == True).select()
+        result = []
+        
+        for token in tokens:
+            created_by_user = db.auth_user[token.created_by] if token.created_by else None
+            
+            token_data = {
+                'id': token.id,
+                'token': token.token,
+                'database_name': token.database_name,
+                'table_name': token.table_name,
+                'actions': token.actions,
+                'created_by': created_by_user.username if created_by_user else None,
+                'created_at': token.created_at.isoformat(),
+                'expires_at': token.expires_at.isoformat(),
+                'max_uses': token.max_uses,
+                'use_count': token.use_count,
+                'last_used': token.last_used.isoformat() if token.last_used else None,
+                'client_ip': token.client_ip,
+                'is_active': token.is_active,
+                'expired': token.expires_at < datetime.utcnow()
+            }
+            result.append(token_data)
+        
+        return {'tokens': result, 'count': len(result)}
+    except Exception as e:
+        abort(500, str(e))
+
+@action('api/temporary-access/<token_id:int>/revoke', method=['POST'])
+@action.uses(auth, cors, db)
+def revoke_temporary_access(token_id):
+    """Revoke a temporary access token"""
+    try:
+        token = db.temporary_access[token_id]
+        if not token:
+            abort(404, 'Token not found')
+        
+        db(db.temporary_access.id == token_id).update(is_active=False)
+        db.commit()
+        
+        return {'message': 'Temporary access token revoked successfully'}
     except Exception as e:
         abort(400, str(e))
 

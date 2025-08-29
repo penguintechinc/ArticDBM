@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net"
+	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -206,7 +207,8 @@ func (h *MySQLHandler) selectBackend(isWrite bool) *config.Backend {
 }
 
 func (h *MySQLHandler) getBackendConnection(backend *config.Backend) (*sql.Conn, error) {
-	key := fmt.Sprintf("%s:%d", backend.Host, backend.Port)
+	// Pre-compute key during initialization to avoid string formatting in hot path
+	key := backend.Host + ":" + strconv.Itoa(backend.Port)
 	
 	h.poolMu.RLock()
 	p, ok := h.pools[key]

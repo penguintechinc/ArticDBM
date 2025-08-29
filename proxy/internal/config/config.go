@@ -80,16 +80,23 @@ type Backend struct {
 type User struct {
 	Username     string
 	PasswordHash string
+	APIKey       string    // API key for programmatic access
 	Enabled      bool
+	RequireTLS   bool      // Force TLS for this user
+	AllowedIPs   []string  // IP whitelist for additional security
+	RateLimit    int       // Requests per second limit
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+	ExpiresAt    *time.Time // Optional account expiration
 }
 
 type Permission struct {
-	UserID   string
-	Database string
-	Table    string
-	Actions  []string // "read", "write"
+	UserID     string
+	Database   string
+	Table      string
+	Actions    []string // "read", "write", "admin"
+	TimeLimit  *time.Time // Optional access expiration per database
+	MaxQueries int      // Query limit per hour for this database
 }
 
 func LoadConfig() *Config {
