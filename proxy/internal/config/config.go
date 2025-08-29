@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strconv"
 	"sync"

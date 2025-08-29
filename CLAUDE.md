@@ -53,7 +53,7 @@ ArticDBM/
 ## 🔧 Technology Stack
 
 ### Proxy (Go)
-- **Language**: Go 1.21+
+- **Language**: Go 1.23.x (latest patch version)
 - **Database Drivers**: 
   - MySQL: `github.com/go-sql-driver/mysql`
   - PostgreSQL: `github.com/lib/pq`

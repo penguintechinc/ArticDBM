@@ -291,7 +291,7 @@ func (h *MSSQLHandler) proxyTraffic(ctx context.Context, client net.Conn, backen
 						zap.String("database", database),
 						zap.String("attack_type", attackType),
 						zap.String("description", description),
-						zap.String("query", query[:minInt(100, len(query))]))
+						zap.String("query", query[:min(100, len(query))]))
 					metrics.IncSQLInjection("mssql")
 					h.sendError(client, "Query blocked by security policy: "+attackType)
 					return
@@ -306,7 +306,7 @@ func (h *MSSQLHandler) proxyTraffic(ctx context.Context, client net.Conn, backen
 						zap.String("source_ip", sourceIP),
 						zap.String("threat_level", indicator.ThreatLevel),
 						zap.String("reason", reason),
-						zap.String("query", query[:minInt(100, len(query))]))
+						zap.String("query", query[:min(100, len(query))]))
 					metrics.IncSQLInjection("mssql") // Use same metric for now
 					h.sendError(client, "Query blocked by threat intelligence: "+reason)
 					return
@@ -337,16 +337,3 @@ func (h *MSSQLHandler) isWriteQuery(query string) bool {
 	return security.IsWriteQuery(query)
 }
 
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

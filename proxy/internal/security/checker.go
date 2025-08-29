@@ -430,12 +430,12 @@ func (c *SQLChecker) CheckThreatIntel(ctx context.Context, database string, sour
 	configData, err := c.redis.Get(ctx, "articdbm:database_security_configs").Result()
 	if err != nil {
 		// If no config found, default to enabled
-		return c.checkThreatIndicators(ctx, sourceIP, query, username)
+		return c.checkThreatIndicators(ctx, database, sourceIP, query, username)
 	}
 
 	var configs map[string]DatabaseSecurityConfig
 	if err := json.Unmarshal([]byte(configData), &configs); err != nil {
-		return c.checkThreatIndicators(ctx, sourceIP, query, username)
+		return c.checkThreatIndicators(ctx, database, sourceIP, query, username)
 	}
 
 	// Check if this database has threat intel blocks enabled
@@ -445,10 +445,10 @@ func (c *SQLChecker) CheckThreatIntel(ctx context.Context, database string, sour
 		}
 	}
 
-	return c.checkThreatIndicators(ctx, sourceIP, query, username)
+	return c.checkThreatIndicators(ctx, database, sourceIP, query, username)
 }
 
-func (c *SQLChecker) checkThreatIndicators(ctx context.Context, sourceIP string, query string, username string) (bool, *ThreatIndicator, string) {
+func (c *SQLChecker) checkThreatIndicators(ctx context.Context, database string, sourceIP string, query string, username string) (bool, *ThreatIndicator, string) {
 	// Get threat indicators from Redis
 	indicatorData, err := c.redis.Get(ctx, "articdbm:threat_indicators").Result()
 	if err != nil {
