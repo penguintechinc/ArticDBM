@@ -92,8 +92,10 @@ graph TD
 ## 🔒 Security Features
 
 - **SQL Injection Detection**: Pattern-based analysis with 14+ common attack vectors
+- **Threat Intelligence Integration**: STIX/TAXII, OpenIOC, and MISP feed support for blocking known threats
+- **Per-Database Security Policies**: Configure security settings individually for each database
 - **Fine-grained Permissions**: Database and table-level access control
-- **Audit Logging**: Complete query and access trail
+- **Audit Logging**: Complete query and access trail with threat match recording
 - **TLS Support**: Encrypted connections to backends
 - **Authentication Caching**: Redis-based performance optimization
 

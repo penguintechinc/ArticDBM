@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArticDBM - Database Management Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f5f7fa;
+            color: #2d3748;
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid #667eea;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .card h3 {
+            color: #2d3748;
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .card p {
+            color: #718096;
+            margin-bottom: 1.5rem;
+        }
+        
+        .btn {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .btn:hover {
+            background: #5a6fd8;
+        }
+        
+        .btn.btn-secondary {
+            background: #718096;
+        }
+        
+        .btn.btn-secondary:hover {
+            background: #4a5568;
+        }
+        
+        .btn.btn-danger {
+            background: #e53e3e;
+        }
+        
+        .btn.btn-danger:hover {
+            background: #c53030;
+        }
+        
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+        
+        .stat-label {
+            color: #718096;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .security-features {
+            background: #f7fafc;
+            padding: 2rem;
+            border-radius: 8px;
+            margin: 2rem 0;
+        }
+        
+        .security-features h2 {
+            color: #2d3748;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .feature-item {
+            display: flex;
+            align-items: center;
+            background: white;
+            padding: 1rem;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .feature-icon {
+            width: 40px;
+            height: 40px;
+            background: #667eea;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .feature-text {
+            flex: 1;
+        }
+        
+        .feature-text h4 {
+            margin-bottom: 0.25rem;
+            color: #2d3748;
+        }
+        
+        .feature-text p {
+            color: #718096;
+            font-size: 0.875rem;
+            margin: 0;
+        }
+        
+        .quick-actions {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-top: 2rem;
+        }
+        
+        .quick-actions h3 {
+            margin-bottom: 1rem;
+            text-align: center;
+            color: #2d3748;
+        }
+        
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: #718096;
+            margin-top: 3rem;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>ArticDBM</h1>
+        <p>Advanced Database Management & Security Proxy</p>
+    </header>
+    
+    <div class="container">
+        <div class="stats-row" id="stats-row">
+            <div class="stat-card">
+                <span class="stat-number" id="total-servers">-</span>
+                <div class="stat-label">Active Servers</div>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="total-users">-</span>
+                <div class="stat-label">Users</div>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="total-permissions">-</span>
+                <div class="stat-label">Permissions</div>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="blocked-resources">-</span>
+                <div class="stat-label">Blocked Resources</div>
+            </div>
+        </div>
+        
+        <div class="security-features">
+            <h2>Security Features</h2>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <div class="feature-icon">🛡️</div>
+                    <div class="feature-text">
+                        <h4>SQL Injection Protection</h4>
+                        <p>Advanced pattern matching and heuristics</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🚫</div>
+                    <div class="feature-text">
+                        <h4>Default Database Blocking</h4>
+                        <p>Automatically blocks test and system databases</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">👤</div>
+                    <div class="feature-text">
+                        <h4>Account Protection</h4>
+                        <p>Prevents access to default admin accounts</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">⚡</div>
+                    <div class="feature-text">
+                        <h4>Shell Command Detection</h4>
+                        <p>Blocks dangerous system command execution</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">📊</div>
+                    <div class="feature-text">
+                        <h4>Real-time Monitoring</h4>
+                        <p>Track queries and security threats</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🔧</div>
+                    <div class="feature-text">
+                        <h4>Configurable Rules</h4>
+                        <p>Customize blocking patterns and policies</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="dashboard-grid">
+            <div class="card">
+                <h3>Database Servers</h3>
+                <p>Manage database server connections including MySQL, PostgreSQL, MSSQL, MongoDB, and Redis instances.</p>
+                <a href="/api/servers" class="btn">Manage Servers</a>
+            </div>
+            
+            <div class="card">
+                <h3>User Permissions</h3>
+                <p>Configure user access rights and database permissions. Control who can read or write to specific databases.</p>
+                <a href="/api/permissions" class="btn">Manage Permissions</a>
+            </div>
+            
+            <div class="card">
+                <h3>Blocked Resources</h3>
+                <p>Configure blocked databases, users, and tables. Protect against access to default and test resources.</p>
+                <a href="blocked-resources.html" class="btn">Manage Blocking</a>
+            </div>
+            
+            <div class="card">
+                <h3>Security Rules</h3>
+                <p>Define custom security patterns and SQL injection detection rules to protect your databases.</p>
+                <a href="/api/security-rules" class="btn">Security Rules</a>
+            </div>
+            
+            <div class="card">
+                <h3>Audit Logs</h3>
+                <p>Review database access logs, security incidents, and system activity for compliance and monitoring.</p>
+                <a href="/api/audit-log" class="btn">View Logs</a>
+            </div>
+            
+            <div class="card">
+                <h3>SQL File Manager</h3>
+                <p>Upload, validate, and execute SQL scripts with built-in security scanning and syntax checking.</p>
+                <a href="/api/sql-files" class="btn">Manage SQL Files</a>
+            </div>
+            
+            <div class="card">
+                <h3>Managed Databases</h3>
+                <p>Track and manage databases under ArticDBM control with schema versioning and backup scheduling.</p>
+                <a href="/api/databases" class="btn">Database Management</a>
+            </div>
+            
+            <div class="card">
+                <h3>System Statistics</h3>
+                <p>Monitor system performance, query statistics, and security metrics across your infrastructure.</p>
+                <a href="/api/stats" class="btn">View Statistics</a>
+            </div>
+        </div>
+        
+        <div class="quick-actions">
+            <h3>Quick Actions</h3>
+            <div class="actions-grid">
+                <button class="btn" onclick="seedDefaultBlocked()">Seed Default Blocked Resources</button>
+                <button class="btn btn-secondary" onclick="syncToRedis()">Sync Configuration to Redis</button>
+                <button class="btn btn-secondary" onclick="validateSQLFiles()">Validate All SQL Files</button>
+                <button class="btn btn-danger" onclick="showSecuritySummary()">Security Summary</button>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="footer">
+        <p>&copy; 2024 ArticDBM - Advanced Database Management System</p>
+        <p>Secure • Scalable • Reliable</p>
+    </footer>
+    
+    <script>
+        // Load dashboard statistics
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStatistics();
+        });
+        
+        async function loadStatistics() {
+            try {
+                // Load general stats
+                const statsResponse = await fetch('/api/stats');
+                if (statsResponse.ok) {
+                    const stats = await statsResponse.json();
+                    document.getElementById('total-servers').textContent = stats.total_servers || 0;
+                    document.getElementById('total-users').textContent = stats.total_users || 0;
+                    document.getElementById('total-permissions').textContent = stats.total_permissions || 0;
+                }
+                
+                // Load blocking config
+                const blockingResponse = await fetch('/api/blocking-config');
+                if (blockingResponse.ok) {
+                    const blocking = await blockingResponse.json();
+                    document.getElementById('blocked-resources').textContent = blocking.active_blocked_resources || 0;
+                }
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+                // Set default values on error
+                document.getElementById('total-servers').textContent = 'N/A';
+                document.getElementById('total-users').textContent = 'N/A';
+                document.getElementById('total-permissions').textContent = 'N/A';
+                document.getElementById('blocked-resources').textContent = 'N/A';
+            }
+        }
+        
+        async function seedDefaultBlocked() {
+            if (!confirm('This will add default blocked resources. Continue?')) return;
+            
+            try {
+                const response = await fetch('/api/seed-blocked-resources', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    alert('Default blocked resources seeded successfully');
+                    loadStatistics();
+                } else {
+                    throw new Error('Failed to seed resources');
+                }
+            } catch (error) {
+                alert('Error seeding resources: ' + error.message);
+            }
+        }
+        
+        async function syncToRedis() {
+            try {
+                const response = await fetch('/api/sync', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    alert('Configuration synced to Redis successfully');
+                } else {
+                    throw new Error('Failed to sync to Redis');
+                }
+            } catch (error) {
+                alert('Error syncing to Redis: ' + error.message);
+            }
+        }
+        
+        async function validateSQLFiles() {
+            try {
+                const response = await fetch('/api/sql-files');
+                if (response.ok) {
+                    const data = await response.json();
+                    const totalFiles = data.sql_files.length;
+                    const validatedFiles = data.sql_files.filter(f => f.security_validated).length;
+                    
+                    alert(`SQL File Validation Summary:\nTotal Files: ${totalFiles}\nSecurity Validated: ${validatedFiles}\nNeed Validation: ${totalFiles - validatedFiles}`);
+                } else {
+                    throw new Error('Failed to load SQL files');
+                }
+            } catch (error) {
+                alert('Error validating SQL files: ' + error.message);
+            }
+        }
+        
+        async function showSecuritySummary() {
+            try {
+                const [statsResponse, blockingResponse, rulesResponse] = await Promise.all([
+                    fetch('/api/stats'),
+                    fetch('/api/blocking-config'),
+                    fetch('/api/security-rules')
+                ]);
+                
+                const stats = await statsResponse.json();
+                const blocking = await blockingResponse.json();
+                const rules = await rulesResponse.json();
+                
+                const summary = `Security Summary:
+                
+📊 Active Servers: ${stats.total_servers}
+🚫 Blocked Resources: ${blocking.active_blocked_resources}
+   - Databases: ${blocking.blocked_by_type.databases}
+   - Users: ${blocking.blocked_by_type.users}
+   - Tables: ${blocking.blocked_by_type.tables}
+🔒 Security Rules: ${rules.rules.length}
+📈 Total Queries Logged: ${stats.recent_queries}
+
+Database Types:
+${Object.entries(stats.servers_by_type).map(([type, count]) => `- ${type}: ${count} servers`).join('\n')}`;
+                
+                alert(summary);
+            } catch (error) {
+                alert('Error loading security summary: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

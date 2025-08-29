@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strconv"
 	"sync"
@@ -53,6 +52,12 @@ type Config struct {
 	ConnectionTimeout     time.Duration
 	QueryTimeout          time.Duration
 
+	// Database/Account blocking configuration
+	DefaultDatabaseBlocking bool
+	CustomBlockingEnabled   bool
+	BlockingEnabled         bool
+	SeedDefaultBlocked      bool
+
 	ClusterMode      bool
 	ClusterRedisAddr string
 
@@ -74,16 +79,23 @@ type Backend struct {
 type User struct {
 	Username     string
 	PasswordHash string
+	APIKey       string    // API key for programmatic access
 	Enabled      bool
+	RequireTLS   bool      // Force TLS for this user
+	AllowedIPs   []string  // IP whitelist for additional security
+	RateLimit    int       // Requests per second limit
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+	ExpiresAt    *time.Time // Optional account expiration
 }
 
 type Permission struct {
-	UserID   string
-	Database string
-	Table    string
-	Actions  []string // "read", "write"
+	UserID     string
+	Database   string
+	Table      string
+	Actions    []string // "read", "write", "admin"
+	TimeLimit  *time.Time // Optional access expiration per database
+	MaxQueries int      // Query limit per hour for this database
 }
 
 func LoadConfig() *Config {
@@ -118,6 +130,13 @@ func LoadConfig() *Config {
 		MaxConnections:        getEnvAsInt("MAX_CONNECTIONS", 1000),
 		ConnectionTimeout:     time.Duration(getEnvAsInt("CONNECTION_TIMEOUT", 30)) * time.Second,
 		QueryTimeout:          time.Duration(getEnvAsInt("QUERY_TIMEOUT", 60)) * time.Second,
+		
+		// Database/Account blocking configuration
+		DefaultDatabaseBlocking: getEnvAsBool("DEFAULT_DATABASE_BLOCKING", true),
+		CustomBlockingEnabled:   getEnvAsBool("CUSTOM_BLOCKING_ENABLED", true),
+		BlockingEnabled:         getEnvAsBool("BLOCKING_ENABLED", true),
+		SeedDefaultBlocked:      getEnvAsBool("SEED_DEFAULT_BLOCKED", true),
+		
 		ClusterMode:           getEnvAsBool("CLUSTER_MODE", false),
 		ClusterRedisAddr:      getEnv("CLUSTER_REDIS_ADDR", ""),
 		Users:                 make(map[string]*User),

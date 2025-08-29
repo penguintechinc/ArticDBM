@@ -19,6 +19,7 @@
             </div>
             <ul class="nav-links">
                 <li><a href="#features">Features</a></li>
+                <li><a href="pricing.html">Pricing</a></li>
                 <li><a href="https://docs.articdbm.penguintech.io">Docs</a></li>
                 <li><a href="#download">Download</a></li>
                 <li><a href="https://github.com/articdbm/articdbm" class="btn-primary">GitHub</a></li>
@@ -71,7 +72,7 @@ mysql -h localhost -P 3306 -u user -p</code></pre>
                     <p class="stat-label">Added Latency</p>
                 </div>
                 <div class="stat">
-                    <h3 class="stat-number">14+</h3>
+                    <h3 class="stat-number">40+</h3>
                     <p class="stat-label">Security Patterns</p>
                 </div>
             </div>
@@ -88,8 +89,8 @@ mysql -h localhost -P 3306 -u user -p</code></pre>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon">🔒</div>
-                        <h3>Advanced Security</h3>
-                        <p>Real-time SQL injection detection, fine-grained permissions, and comprehensive audit logging.</p>
+                        <h3>Enterprise Security</h3>
+                        <p>40+ attack patterns detection including SQL injection, shell commands, and default resource blocking with real-time threat prevention.</p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon">⚡</div>
@@ -110,6 +111,21 @@ mysql -h localhost -P 3306 -u user -p</code></pre>
                         <div class="feature-icon">🔄</div>
                         <h3>High Availability</h3>
                         <p>Cluster mode with shared configuration, automatic failover, and zero-downtime updates.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🗃️</div>
+                        <h3>Database Management</h3>
+                        <p>Complete lifecycle management with secure SQL file uploads, validation, schema tracking, and automated backup scheduling.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🛡️</div>
+                        <h3>Threat Protection</h3>
+                        <p>Advanced shell command blocking, default account protection, and comprehensive security validation with detailed threat analysis.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🏢</div>
+                        <h3>MSP & PaaS Ready</h3>
+                        <p>Perfect for Managed Service Providers and Cloud platforms to offer Database-as-a-Service with built-in security, multi-tenancy, and white-label options.</p>
                     </div>
                 </div>
             </div>
@@ -261,10 +277,14 @@ mysql -h localhost -P 3306 -u user -p</code></pre>
                         <div class="security-benefits">
                             <h3>ArticDBM's Multi-Layer Protection</h3>
                             <ul class="benefits-list">
-                                <li><strong>Real-Time Threat Detection:</strong> 14+ SQL injection patterns blocked instantly</li>
-                                <li><strong>Zero-Trust Access Control:</strong> Every query validated against user permissions</li>
-                                <li><strong>Complete Audit Trail:</strong> Full forensic logging of every database access attempt</li>
-                                <li><strong>Instant Threat Response:</strong> Malicious queries blocked before reaching your data</li>
+                                <li><strong>Advanced Threat Detection:</strong> 40+ attack patterns including SQL injection, shell commands, and system intrusions blocked instantly</li>
+                                <li><strong>Threat Intelligence Integration:</strong> Real-time blocking of known threats via STIX/TAXII, OpenIOC, and MISP feeds</li>
+                                <li><strong>Default Resource Protection:</strong> Automatic blocking of system databases, admin accounts, and test resources</li>
+                                <li><strong>Shell Command Prevention:</strong> Real-time detection of system command injection and file system attacks</li>
+                                <li><strong>Per-Database Security Policies:</strong> Configure threat intel and security settings individually for each database</li>
+                                <li><strong>Zero-Trust Access Control:</strong> Every query validated against user permissions with comprehensive audit trails</li>
+                                <li><strong>SQL File Security:</strong> Uploaded files undergo extensive security validation before execution</li>
+                                <li><strong>Database Lifecycle Security:</strong> Complete management with built-in security validation at every stage</li>
                             </ul>
                         </div>
                     </div>
@@ -323,6 +343,125 @@ mysql -h localhost -P 3306 -u user -p</code></pre>
                 <div class="cta-buttons">
                     <a href="https://github.com/articdbm/articdbm/archive/refs/heads/main.zip" class="btn-cta">Download Now</a>
                     <a href="https://docs.articdbm.penguintech.io" class="btn-docs">View Documentation</a>
+                </div>
+            </div>
+        </section>
+
+        <section class="pricing" id="pricing">
+            <div class="container">
+                <h2 class="section-title">Simple, Transparent Pricing</h2>
+                <p class="section-subtitle">Choose the plan that scales with your business needs</p>
+                
+                <div class="pricing-grid">
+                    <div class="pricing-card community">
+                        <div class="pricing-header">
+                            <h3>Community</h3>
+                            <div class="price">
+                                <span class="price-amount">Free</span>
+                                <span class="price-period">Forever</span>
+                            </div>
+                        </div>
+                        <div class="pricing-features">
+                            <ul>
+                                <li>✅ Database Proxy (All Protocols)</li>
+                                <li>✅ SQL Injection Detection</li>
+                                <li>✅ Connection Pooling</li>
+                                <li>✅ Basic Authentication</li>
+                                <li>✅ Audit Logging</li>
+                                <li>✅ Prometheus Metrics</li>
+                                <li>✅ 1 Threat Intelligence Feed</li>
+                                <li>✅ Default Resource Blocking</li>
+                                <li>✅ Web Management Interface</li>
+                                <li>📧 Community Support</li>
+                            </ul>
+                        </div>
+                        <div class="pricing-action">
+                            <a href="https://github.com/articdbm/articdbm" class="btn-pricing community">Get Started Free</a>
+                        </div>
+                    </div>
+                    
+                    <div class="pricing-card enterprise featured">
+                        <div class="pricing-badge">Most Popular</div>
+                        <div class="pricing-header">
+                            <h3>Enterprise</h3>
+                            <div class="price">
+                                <span class="price-amount">$5</span>
+                                <span class="price-period">per database/month</span>
+                            </div>
+                        </div>
+                        <div class="pricing-features">
+                            <ul>
+                                <li>✅ All Community Features</li>
+                                <li>🚀 Unlimited Threat Intel Feeds</li>
+                                <li>🚀 STIX/TAXII Support</li>
+                                <li>🚀 OpenIOC Integration</li>
+                                <li>🚀 MISP Platform Integration</li>
+                                <li>🚀 Per-Database Security Policies</li>
+                                <li>🚀 Advanced Threat Detection</li>
+                                <li>🚀 Custom Security Rules</li>
+                                <li>🚀 Threat Intel Bypass Rules</li>
+                                <li>🚀 API Access</li>
+                                <li>🚀 Custom Branding</li>
+                                <li>📞 Priority Support</li>
+                                <li>📧 Email Support</li>
+                            </ul>
+                        </div>
+                        <div class="pricing-action">
+                            <a href="mailto:sales@penguintech.io?subject=ArticDBM Enterprise License&body=Hi, I'm interested in ArticDBM Enterprise. Please send me pricing details for my databases." class="btn-pricing enterprise">Contact Sales</a>
+                        </div>
+                    </div>
+
+                    <div class="pricing-card embedded">
+                        <div class="pricing-header">
+                            <h3>Embedded</h3>
+                            <div class="price">
+                                <span class="price-amount">Custom</span>
+                                <span class="price-period">White Label Pricing</span>
+                            </div>
+                        </div>
+                        <div class="pricing-features">
+                            <ul>
+                                <li>✅ All Enterprise Features</li>
+                                <li>🎯 White Label / OEM Licensing</li>
+                                <li>🎯 Embed in Your Application</li>
+                                <li>🎯 Remove ArticDBM Branding</li>
+                                <li>🎯 Custom UI/UX Integration</li>
+                                <li>🎯 API-First Architecture</li>
+                                <li>🎯 Redistribute with Your Product</li>
+                                <li>🎯 Commercial Use Rights</li>
+                                <li>🎯 Source Code Access</li>
+                                <li>🎯 Custom Feature Development</li>
+                                <li>🎯 SLA & Dedicated Support</li>
+                                <li>📞 Direct Engineering Access</li>
+                                <li>🔧 Professional Services</li>
+                            </ul>
+                        </div>
+                        <div class="pricing-action">
+                            <a href="mailto:sales@penguintech.io?subject=ArticDBM Embedded/White Label License&body=Hi, I'm interested in embedding ArticDBM in my application. Please send me information about white label licensing, pricing, and integration options." class="btn-pricing embedded">Contact Sales</a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="pricing-faq">
+                    <h3>Frequently Asked Questions</h3>
+                    <div class="faq-grid">
+                        <div class="faq-item">
+                            <h4>What counts as a database?</h4>
+                            <p>Each managed database connection in your ArticDBM configuration counts as one database, regardless of size or usage.</p>
+                        </div>
+                        <div class="faq-item">
+                            <h4>Can I mix Community and Enterprise?</h4>
+                            <p>Yes! You can upgrade individual databases to Enterprise features while keeping others on Community edition.</p>
+                        </div>
+                        <div class="faq-item">
+                            <h4>Do you offer volume discounts?</h4>
+                            <p>Yes, we offer discounts for organizations with 10+ databases. Contact sales for custom pricing.</p>
+                        </div>
+                        <div class="faq-item">
+                            <h4>What threat intelligence feeds are supported?</h4>
+                            <p>Enterprise supports unlimited STIX/TAXII feeds, OpenIOC files, MISP integration, and custom threat feeds.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>

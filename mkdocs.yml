@@ -1,5 +1,5 @@
 site_name: ArticDBM Documentation
-site_url: https://docs.articdbm.penguintech.io
+site_url: https://docs.articdbm.com
 site_author: ArticDBM Team
 site_description: High-performance, security-focused database proxy documentation
 
@@ -77,11 +77,18 @@ nav:
     - Usage Guide: USAGE.md
   - Architecture:
     - System Design: ARCHITECTURE.md
+  - Security & Management:
+    - User Management: USER-MANAGEMENT.md
+    - Threat Intelligence: THREAT-INTELLIGENCE.md
+  - API Reference:
+    - API Documentation: API_REFERENCE.md
+    - ArticDBM API Design: ArticDBM API Design.md
   - Deployment:
     - Kubernetes: KUBERNETES.md
     - Cloudflare Setup: CLOUDFLARE-SETUP.md
   - Community:
     - Contributing: CONTRIBUTING.md
+    - License: LICENSE.md
     - Release Notes: RELEASE-NOTES.md
 
 extra:

@@ -1,6 +1,6 @@
 # 📝 ArticDBM Release Notes
 
-## Version 1.0.0 (2024-01-15)
+## Version 1.0.0 (2025-08-29)
 
 ### 🎉 Initial Release
 
