@@ -1137,7 +1137,7 @@ body {
 }
 
 .pricing-header h3 {
-    color: white;
+    color: var(--dark-blue);
     font-size: 1.8rem;
     font-weight: 700;
     margin-bottom: 1rem;
@@ -1151,14 +1151,15 @@ body {
 }
 
 .price-amount {
-    color: var(--ice-blue);
+    color: var(--dark-blue);
     font-size: 3rem;
     font-weight: 800;
     line-height: 1;
 }
 
 .price-period {
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--dark-blue);
+    opacity: 0.8;
     font-size: 0.9rem;
 }
 
@@ -1169,7 +1170,7 @@ body {
 }
 
 .pricing-features li {
-    color: white;
+    color: var(--dark-blue);
     padding: 0.75rem 0;
     border-bottom: 1px solid rgba(135, 206, 235, 0.2);
     display: flex;
@@ -1202,8 +1203,9 @@ body {
 
 .btn-pricing.community {
     background: rgba(135, 206, 235, 0.2);
-    color: white;
+    color: var(--dark-blue);
     border-color: rgba(135, 206, 235, 0.4);
+    font-weight: 700;
 }
 
 .btn-pricing.community:hover {
