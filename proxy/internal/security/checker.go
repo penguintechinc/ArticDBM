@@ -1,22 +1,127 @@
 package security
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/go-redis/redis/v8"
 )
 
 type SQLChecker struct {
 	enabled  bool
 	patterns []*regexp.Regexp
+	redis    *redis.Client
 }
 
-func NewSQLChecker(enabled bool) *SQLChecker {
+type BlockedDatabase struct {
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	Pattern string `json:"pattern"`
+	Reason  string `json:"reason"`
+	Active  bool   `json:"active"`
+}
+
+// DefaultBlockedResources contains comprehensive lists of default databases and accounts to block
+type DefaultBlockedResources struct {
+	Databases []BlockedDatabase `json:"databases"`
+	Users     []BlockedDatabase `json:"users"`
+	Tables    []BlockedDatabase `json:"tables"`
+}
+
+// GetDefaultBlockedResources returns the default blocked resources for all database types
+func GetDefaultBlockedResources() DefaultBlockedResources {
+	return DefaultBlockedResources{
+		Databases: []BlockedDatabase{
+			// Common test/demo databases
+			{Name: "test", Type: "database", Pattern: "^test$", Reason: "Default test database", Active: true},
+			{Name: "sample", Type: "database", Pattern: "^sample$", Reason: "Default sample database", Active: true},
+			{Name: "demo", Type: "database", Pattern: "^demo$", Reason: "Default demo database", Active: true},
+			{Name: "example", Type: "database", Pattern: "^example$", Reason: "Default example database", Active: true},
+			{Name: "temp", Type: "database", Pattern: "^temp$", Reason: "Temporary database", Active: true},
+			{Name: "tmp", Type: "database", Pattern: "^tmp$", Reason: "Temporary database", Active: true},
+			
+			// SQL Server system databases
+			{Name: "master", Type: "database", Pattern: "^master$", Reason: "SQL Server system database", Active: true},
+			{Name: "msdb", Type: "database", Pattern: "^msdb$", Reason: "SQL Server system database", Active: true},
+			{Name: "tempdb", Type: "database", Pattern: "^tempdb$", Reason: "SQL Server system database", Active: true},
+			{Name: "model", Type: "database", Pattern: "^model$", Reason: "SQL Server system database", Active: true},
+			
+			// MySQL system databases
+			{Name: "mysql", Type: "database", Pattern: "^mysql$", Reason: "MySQL system database", Active: true},
+			{Name: "sys", Type: "database", Pattern: "^sys$", Reason: "MySQL system database", Active: true},
+			{Name: "information_schema", Type: "database", Pattern: "^information_schema$", Reason: "MySQL information schema", Active: true},
+			{Name: "performance_schema", Type: "database", Pattern: "^performance_schema$", Reason: "MySQL performance schema", Active: true},
+			
+			// PostgreSQL system databases
+			{Name: "postgres", Type: "database", Pattern: "^postgres$", Reason: "PostgreSQL default database", Active: true},
+			{Name: "template0", Type: "database", Pattern: "^template0$", Reason: "PostgreSQL template database", Active: true},
+			{Name: "template1", Type: "database", Pattern: "^template1$", Reason: "PostgreSQL template database", Active: true},
+			
+			// MongoDB system databases
+			{Name: "admin", Type: "database", Pattern: "^admin$", Reason: "MongoDB admin database", Active: true},
+			{Name: "local", Type: "database", Pattern: "^local$", Reason: "MongoDB local database", Active: true},
+			{Name: "config", Type: "database", Pattern: "^config$", Reason: "MongoDB config database", Active: true},
+			
+			// Pattern-based blocking for common naming conventions
+			{Name: "test_pattern", Type: "database", Pattern: "^test_.*", Reason: "Test database pattern", Active: true},
+			{Name: "sample_pattern", Type: "database", Pattern: "^sample_.*", Reason: "Sample database pattern", Active: true},
+			{Name: "demo_pattern", Type: "database", Pattern: "^demo_.*", Reason: "Demo database pattern", Active: true},
+			{Name: "backup_pattern", Type: "database", Pattern: ".*_backup$", Reason: "Backup database pattern", Active: true},
+			{Name: "old_pattern", Type: "database", Pattern: ".*_old$", Reason: "Old database pattern", Active: true},
+		},
+		Users: []BlockedDatabase{
+			// Common default admin accounts
+			{Name: "sa", Type: "username", Pattern: "^sa$", Reason: "SQL Server default admin account", Active: true},
+			{Name: "root", Type: "username", Pattern: "^root$", Reason: "Default root account", Active: true},
+			{Name: "admin", Type: "username", Pattern: "^admin$", Reason: "Default admin account", Active: true},
+			{Name: "administrator", Type: "username", Pattern: "^administrator$", Reason: "Default administrator account", Active: true},
+			{Name: "guest", Type: "username", Pattern: "^guest$", Reason: "Default guest account", Active: true},
+			
+			// Test/demo accounts
+			{Name: "test", Type: "username", Pattern: "^test$", Reason: "Test user account", Active: true},
+			{Name: "demo", Type: "username", Pattern: "^demo$", Reason: "Demo user account", Active: true},
+			{Name: "sample", Type: "username", Pattern: "^sample$", Reason: "Sample user account", Active: true},
+			{Name: "user", Type: "username", Pattern: "^user$", Reason: "Generic user account", Active: true},
+			
+			// Database-specific default accounts
+			{Name: "mysql", Type: "username", Pattern: "^mysql$", Reason: "MySQL service account", Active: true},
+			{Name: "postgres", Type: "username", Pattern: "^postgres$", Reason: "PostgreSQL default account", Active: true},
+			{Name: "oracle", Type: "username", Pattern: "^oracle$", Reason: "Oracle default account", Active: true},
+			{Name: "sqlserver", Type: "username", Pattern: "^sqlserver$", Reason: "SQL Server service account", Active: true},
+			
+			// Empty/blank username
+			{Name: "empty", Type: "username", Pattern: "^$", Reason: "Empty/anonymous username", Active: true},
+			{Name: "anonymous", Type: "username", Pattern: "^anonymous$", Reason: "Anonymous user account", Active: true},
+			
+			// Pattern-based blocking
+			{Name: "test_pattern", Type: "username", Pattern: "^test_.*", Reason: "Test user pattern", Active: true},
+			{Name: "admin_pattern", Type: "username", Pattern: ".*admin.*", Reason: "Admin user pattern", Active: true},
+		},
+		Tables: []BlockedDatabase{
+			// System tables
+			{Name: "user", Type: "table", Pattern: "^user$", Reason: "System user table", Active: true},
+			{Name: "users", Type: "table", Pattern: "^users$", Reason: "System users table", Active: true},
+			{Name: "mysql.user", Type: "table", Pattern: "^mysql\\.user$", Reason: "MySQL user table", Active: true},
+			{Name: "pg_user", Type: "table", Pattern: "^pg_user$", Reason: "PostgreSQL user table", Active: true},
+			{Name: "sysusers", Type: "table", Pattern: "^sysusers$", Reason: "SQL Server system users", Active: true},
+			{Name: "sysobjects", Type: "table", Pattern: "^sysobjects$", Reason: "SQL Server system objects", Active: true},
+			{Name: "information_schema", Type: "table", Pattern: "^information_schema\\..*", Reason: "Information schema tables", Active: true},
+		},
+	}
+}
+
+func NewSQLChecker(enabled bool, redisClient *redis.Client) *SQLChecker {
 	checker := &SQLChecker{
 		enabled: enabled,
+		redis:   redisClient,
 	}
 
 	if enabled {
 		checker.patterns = []*regexp.Regexp{
+			// Existing SQL injection patterns
 			regexp.MustCompile(`(?i)(\bunion\b.*\bselect\b|\bselect\b.*\bunion\b)`),
 			regexp.MustCompile(`(?i)(;\s*drop\s+|;\s*delete\s+|;\s*truncate\s+|;\s*alter\s+)`),
 			regexp.MustCompile(`(?i)(\bor\b\s*\d+\s*=\s*\d+|\band\b\s*\d+\s*=\s*\d+)`),
@@ -31,6 +136,43 @@ func NewSQLChecker(enabled bool) *SQLChecker {
 			regexp.MustCompile(`(?i)(0x[0-9a-f]+|\bhex\s*\(|\bunhex\s*\()`),
 			regexp.MustCompile(`(?i)(\bconcat\s*\(.*\bchar\s*\(|\bchar\s*\(.*\bconcat\s*\()`),
 			regexp.MustCompile(`(?i)(\b(having|group\s+by)\b.*\b(select|union)\b)`),
+			
+			// Enhanced shell command detection patterns
+			regexp.MustCompile(`(?i)(\bsystem\s*\(|\bshell_exec\s*\(|\bpassthru\s*\()`),
+			regexp.MustCompile(`(?i)(\bproc_open\s*\(|\bpopen\s*\()`),
+			regexp.MustCompile(`(?i)(\bcmd\b|\bpowershell\b|\bbash\b|\bsh\b)`),
+			regexp.MustCompile(`(?i)(/bin/|/usr/bin/|/sbin/|/usr/sbin/)`),
+			regexp.MustCompile(`(?i)(\bchmod\b|\bchown\b|\bsu\b|\bsudo\b)`),
+			regexp.MustCompile(`(?i)(\bkill\b|\bkillall\b|\bps\b|\btop\b)`),
+			regexp.MustCompile(`(?i)(\bcat\b\s+/|\btail\b\s+/|\bhead\b\s+/)`),
+			regexp.MustCompile(`(?i)(\bls\b\s+/|\bfind\b\s+/|\bgrep\b\s+-r)`),
+			regexp.MustCompile(`(?i)(\bwget\b|\bcurl\b|\bnc\b|\bnetcat\b)`),
+			regexp.MustCompile(`(?i)(\bmkdir\b|\brmdir\b|\brm\b\s+-rf)`),
+			regexp.MustCompile(`(?i)(\bcp\b\s+/|\bmv\b\s+/|\btar\b\s+-)`),
+			regexp.MustCompile(`(?i)(\bawk\b|\bsed\b|\bperl\b|\bpython\b)`),
+			regexp.MustCompile(`(?i)(\bvi\b|\bvim\b|\bnano\b|\bemacs\b)`),
+			regexp.MustCompile(`(?i)(\b\|\s*sh\b|\b\|\s*bash\b|\b&&\s*sh\b)`),
+			regexp.MustCompile(`(?i)(\$\(.*\)|` + "`" + `.*` + "`" + `|\beval\b)`),
+			
+			// Additional dangerous system calls
+			regexp.MustCompile(`(?i)(\bsp_oacreate\b|\bsp_oamethod\b|\bsp_oadestroy\b)`),
+			regexp.MustCompile(`(?i)(\bopenrowset\b|\bopendatasource\b|\blinkedserver\b)`),
+			regexp.MustCompile(`(?i)(\bbulk\s+insert\b|\bbcp\b|\bsqlcmd\b)`),
+			regexp.MustCompile(`(?i)(\bcreate\s+function\b|\bcreate\s+procedure\b)`),
+			regexp.MustCompile(`(?i)(\bgrant\s+execute\b|\bgrant\s+all\b)`),
+			
+			// Registry and file system access patterns (Windows)
+			regexp.MustCompile(`(?i)(\breg\s+add\b|\breg\s+delete\b|\breg\s+query\b)`),
+			regexp.MustCompile(`(?i)(\bHKEY_LOCAL_MACHINE\b|\bHKEY_CURRENT_USER\b)`),
+			regexp.MustCompile(`(?i)(\bsc\s+create\b|\bsc\s+start\b|\bsc\s+stop\b)`),
+			regexp.MustCompile(`(?i)(\bnet\s+user\b|\bnet\s+localgroup\b)`),
+			regexp.MustCompile(`(?i)(\bwmic\b|\brundll32\b|\bregsvr32\b)`),
+			
+			// Default/test database patterns
+			regexp.MustCompile(`(?i)(\btest\b|\bsample\b|\bdemo\b|\bexample\b)`),
+			regexp.MustCompile(`(?i)(\bmaster\.|\bmsdb\.|\btempdb\.|\bmodel\.)`),
+			regexp.MustCompile(`(?i)(\broot\b|\bsa\b|\badmin\b|\bguest\b)`),
+			regexp.MustCompile(`(?i)(\bmysql\.user\b|\bmysql\.db\b|\bpg_user\b)`),
 		}
 	}
 
@@ -65,6 +207,196 @@ func (c *SQLChecker) IsSQLInjection(query string) bool {
 	}
 
 	return suspiciousCount >= 2
+}
+
+// IsBlockedDatabase checks if the database, table, or username is blocked
+func (c *SQLChecker) IsBlockedDatabase(ctx context.Context, database, table, username string) (bool, string) {
+	if c.redis == nil {
+		return false, ""
+	}
+
+	blockedData, err := c.redis.Get(ctx, "articdbm:blocked_databases").Result()
+	if err != nil {
+		return false, ""
+	}
+
+	var blockedDatabases map[string]BlockedDatabase
+	if err := json.Unmarshal([]byte(blockedData), &blockedDatabases); err != nil {
+		return false, ""
+	}
+
+	// Check each blocked resource
+	for _, blocked := range blockedDatabases {
+		if !blocked.Active {
+			continue
+		}
+
+		var targetValue string
+		switch blocked.Type {
+		case "database":
+			targetValue = database
+		case "table":
+			targetValue = table
+		case "username":
+			targetValue = username
+		default:
+			continue
+		}
+
+		if targetValue == "" {
+			continue
+		}
+
+		// Check for exact regex pattern match
+		matched, err := regexp.MatchString(blocked.Pattern, strings.ToLower(targetValue))
+		if err == nil && matched {
+			return true, blocked.Reason
+		}
+
+		// Fallback to simple string containment for backwards compatibility
+		if strings.Contains(strings.ToLower(targetValue), strings.ToLower(blocked.Pattern)) {
+			return true, blocked.Reason
+		}
+	}
+
+	return false, ""
+}
+
+// IsBlockedConnection checks all connection parameters for blocked resources
+func (c *SQLChecker) IsBlockedConnection(ctx context.Context, database, table, username string) (bool, string) {
+	// Check database
+	if blocked, reason := c.IsBlockedDatabase(ctx, database, "", ""); blocked {
+		return true, reason
+	}
+
+	// Check username
+	if blocked, reason := c.IsBlockedDatabase(ctx, "", "", username); blocked {
+		return true, reason
+	}
+
+	// Check table if provided
+	if table != "" {
+		if blocked, reason := c.IsBlockedDatabase(ctx, "", table, ""); blocked {
+			return true, reason
+		}
+	}
+
+	return false, ""
+}
+
+// SeedDefaultBlockedResources initializes Redis with default blocked resources if not present
+func (c *SQLChecker) SeedDefaultBlockedResources(ctx context.Context) error {
+	if c.redis == nil {
+		return nil
+	}
+
+	// Check if blocked resources already exist
+	exists, err := c.redis.Exists(ctx, "articdbm:blocked_databases").Result()
+	if err != nil || exists > 0 {
+		return nil // Already seeded or error occurred
+	}
+
+	defaultResources := GetDefaultBlockedResources()
+	allBlocked := make(map[string]BlockedDatabase)
+	
+	// Add all default databases
+	for i, db := range defaultResources.Databases {
+		allBlocked[fmt.Sprintf("db_%d", i)] = db
+	}
+	
+	// Add all default users
+	for i, user := range defaultResources.Users {
+		allBlocked[fmt.Sprintf("user_%d", i)] = user
+	}
+	
+	// Add all default tables
+	for i, table := range defaultResources.Tables {
+		allBlocked[fmt.Sprintf("table_%d", i)] = table
+	}
+
+	// Store in Redis
+	data, err := json.Marshal(allBlocked)
+	if err != nil {
+		return err
+	}
+
+	return c.redis.Set(ctx, "articdbm:blocked_databases", string(data), 0).Err()
+}
+
+// IsShellCommand checks specifically for shell command patterns
+func (c *SQLChecker) IsShellCommand(query string) bool {
+	if !c.enabled {
+		return false
+	}
+
+	query = strings.ToLower(query)
+	
+	// Shell command specific patterns
+	shellPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?i)(\bsystem\s*\(|\bshell_exec\s*\(|\bpassthru\s*\()`),
+		regexp.MustCompile(`(?i)(\bcmd\b|\bpowershell\b|\bbash\b|\bsh\b)`),
+		regexp.MustCompile(`(?i)(/bin/|/usr/bin/|/sbin/|/usr/sbin/)`),
+		regexp.MustCompile(`(?i)(\bchmod\b|\bchown\b|\bsu\b|\bsudo\b)`),
+		regexp.MustCompile(`(?i)(\$\(.*\)|` + "`" + `.*` + "`" + `|\beval\b)`),
+		regexp.MustCompile(`(?i)(\b\|\s*sh\b|\b\|\s*bash\b|\b&&\s*sh\b)`),
+		regexp.MustCompile(`(?i)(\bxp_cmdshell\b|\bcmd\.exe\b)`),
+	}
+
+	for _, pattern := range shellPatterns {
+		if pattern.MatchString(query) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Enhanced IsSQLInjection with better categorization
+func (c *SQLChecker) IsSQLInjectionWithDetails(query string) (bool, string, string) {
+	if !c.enabled {
+		return false, "", ""
+	}
+
+	query = strings.ToLower(query)
+
+	// Check for shell commands first (critical)
+	if c.IsShellCommand(query) {
+		return true, "shell_command", "Shell command execution detected"
+	}
+
+	// Check regular SQL injection patterns
+	for _, pattern := range c.patterns {
+		if pattern.MatchString(query) {
+			return true, "sql_injection", "SQL injection pattern detected"
+		}
+	}
+
+	// Enhanced heuristics
+	suspiciousCount := 0
+	suspiciousReasons := []string{}
+	
+	if strings.Count(query, "'") > 4 {
+		suspiciousCount++
+		suspiciousReasons = append(suspiciousReasons, "excessive single quotes")
+	}
+	if strings.Count(query, "\"") > 4 {
+		suspiciousCount++
+		suspiciousReasons = append(suspiciousReasons, "excessive double quotes")
+	}
+	if strings.Contains(query, "1=1") || strings.Contains(query, "1 = 1") {
+		suspiciousCount++
+		suspiciousReasons = append(suspiciousReasons, "always-true condition")
+	}
+	if strings.Contains(query, "' or '") || strings.Contains(query, "\" or \"") {
+		suspiciousCount++
+		suspiciousReasons = append(suspiciousReasons, "quote-based bypass attempt")
+	}
+
+	if suspiciousCount >= 2 {
+		return true, "heuristic", "Multiple suspicious patterns: " + strings.Join(suspiciousReasons, ", ")
+	}
+
+	return false, "", ""
 }
 
 func IsWriteQuery(query string) bool {

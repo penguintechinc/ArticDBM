@@ -14,11 +14,11 @@ import (
 	"github.com/articdbm/proxy/internal/pool"
 	"github.com/articdbm/proxy/internal/security"
 	"github.com/go-redis/redis/v8"
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 	"go.uber.org/zap"
 )
 
-type MySQLHandler struct {
+type PostgreSQLHandler struct {
 	cfg          *config.Config
 	redis        *redis.Client
 	logger       *zap.Logger
@@ -29,8 +29,8 @@ type MySQLHandler struct {
 	secChecker   *security.SQLChecker
 }
 
-func NewMySQLHandler(cfg *config.Config, redis *redis.Client, logger *zap.Logger) *MySQLHandler {
-	handler := &MySQLHandler{
+func NewPostgreSQLHandler(cfg *config.Config, redis *redis.Client, logger *zap.Logger) *PostgreSQLHandler {
+	handler := &PostgreSQLHandler{
 		cfg:         cfg,
 		redis:       redis,
 		logger:      logger,
@@ -50,7 +50,7 @@ func NewMySQLHandler(cfg *config.Config, redis *redis.Client, logger *zap.Logger
 	return handler
 }
 
-func (h *MySQLHandler) Start(ctx context.Context, listener net.Listener) {
+func (h *PostgreSQLHandler) Start(ctx context.Context, listener net.Listener) {
 	h.initPools()
 
 	for {
@@ -75,25 +75,26 @@ func (h *MySQLHandler) Start(ctx context.Context, listener net.Listener) {
 	}
 }
 
-func (h *MySQLHandler) initPools() {
+func (h *PostgreSQLHandler) initPools() {
 	h.poolMu.Lock()
 	defer h.poolMu.Unlock()
 
-	for _, backend := range h.cfg.MySQLBackends {
-		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
-			backend.User, backend.Password, backend.Host, backend.Port, backend.Database)
+	for _, backend := range h.cfg.PostgreSQLBackends {
+		dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+			backend.Host, backend.Port, backend.User, backend.Password, backend.Database)
 		
 		if backend.TLS {
-			dsn += "?tls=true"
+			dsn = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=require",
+				backend.Host, backend.Port, backend.User, backend.Password, backend.Database)
 		}
 
-		p := pool.NewConnectionPool("mysql", dsn, h.cfg.MaxConnections/len(h.cfg.MySQLBackends))
+		p := pool.NewConnectionPool("postgres", dsn, h.cfg.MaxConnections/len(h.cfg.PostgreSQLBackends))
 		key := fmt.Sprintf("%s:%d", backend.Host, backend.Port)
 		h.pools[key] = p
 	}
 }
 
-func (h *MySQLHandler) closePools() {
+func (h *PostgreSQLHandler) closePools() {
 	h.poolMu.Lock()
 	defer h.poolMu.Unlock()
 
@@ -102,11 +103,11 @@ func (h *MySQLHandler) closePools() {
 	}
 }
 
-func (h *MySQLHandler) handleConnection(ctx context.Context, clientConn net.Conn) {
+func (h *PostgreSQLHandler) handleConnection(ctx context.Context, clientConn net.Conn) {
 	defer clientConn.Close()
 
-	metrics.IncConnection("mysql")
-	defer metrics.DecConnection("mysql")
+	metrics.IncConnection("postgresql")
+	defer metrics.DecConnection("postgresql")
 
 	username, database, err := h.performHandshake(clientConn)
 	if err != nil {
@@ -114,7 +115,20 @@ func (h *MySQLHandler) handleConnection(ctx context.Context, clientConn net.Conn
 		return
 	}
 
-	if !h.authManager.Authenticate(ctx, username, database, "mysql") {
+	// Check for blocked databases/users/tables if blocking is enabled
+	if h.cfg.BlockingEnabled {
+		if blocked, reason := h.secChecker.IsBlockedConnection(ctx, database, "", username); blocked {
+			h.logger.Warn("Blocked resource access attempt",
+				zap.String("user", username),
+				zap.String("database", database),
+				zap.String("reason", reason),
+				zap.String("type", "postgresql_connection"))
+			h.sendError(clientConn, "Access to this resource is blocked: "+reason)
+			return
+		}
+	}
+
+	if !h.authManager.Authenticate(ctx, username, database, "postgresql") {
 		h.logger.Warn("Authentication failed", 
 			zap.String("user", username),
 			zap.String("database", database))
@@ -140,61 +154,86 @@ func (h *MySQLHandler) handleConnection(ctx context.Context, clientConn net.Conn
 	h.proxyTraffic(ctx, clientConn, backendConn, username, database)
 }
 
-func (h *MySQLHandler) performHandshake(conn net.Conn) (string, string, error) {
+func (h *PostgreSQLHandler) performHandshake(conn net.Conn) (string, string, error) {
 	buf := make([]byte, 4096)
 	n, err := conn.Read(buf)
 	if err != nil {
 		return "", "", err
 	}
 
-	if n < 36 {
+	if n < 8 {
 		return "", "", fmt.Errorf("invalid handshake packet")
 	}
 
-	username := ""
-	database := ""
+	// Simplified PostgreSQL handshake parsing
+	username := "unknown"
+	database := "unknown"
 	
-	pos := 36
-	for pos < n && buf[pos] != 0 {
-		username += string(buf[pos])
-		pos++
-	}
-	pos++
-
-	if pos < n {
-		pos += 23
-		for pos < n && buf[pos] != 0 {
-			database += string(buf[pos])
-			pos++
+	// Parse the startup message for username and database
+	message := string(buf[8:n])
+	params := make(map[string]string)
+	
+	for i := 0; i < len(message); i++ {
+		if message[i] == 0 {
+			continue
+		}
+		
+		// Find key
+		keyStart := i
+		for i < len(message) && message[i] != 0 {
+			i++
+		}
+		if i >= len(message) {
+			break
+		}
+		key := message[keyStart:i]
+		i++
+		
+		// Find value
+		valueStart := i
+		for i < len(message) && message[i] != 0 {
+			i++
+		}
+		if i <= len(message) {
+			value := message[valueStart:i]
+			params[key] = value
 		}
 	}
-
-	greeting := []byte{
-		0x0a, 0x35, 0x2e, 0x37, 0x2e, 0x33, 0x33, 0x00,
-		0x01, 0x00, 0x00, 0x00, 0x41, 0x72, 0x74, 0x69,
-		0x63, 0x44, 0x42, 0x4d, 0x00, 0x00, 0x00, 0x00,
+	
+	if user, ok := params["user"]; ok {
+		username = user
 	}
-	conn.Write(greeting)
+	if db, ok := params["database"]; ok {
+		database = db
+	}
+
+	// Send authentication OK response
+	authResponse := []byte{0x52, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00}
+	conn.Write(authResponse)
 
 	return username, database, nil
 }
 
-func (h *MySQLHandler) sendError(conn net.Conn, message string) {
-	errorPacket := []byte{
-		0xff,
-		0x48, 0x04,
-		0x23, 0x48, 0x59, 0x30, 0x30, 0x30,
-	}
-	errorPacket = append(errorPacket, []byte(message)...)
+func (h *PostgreSQLHandler) sendError(conn net.Conn, message string) {
+	errorPacket := []byte{0x45} // Error response
+	errorMsg := fmt.Sprintf("SERROR\x00CFATAL\x00M%s\x00\x00", message)
+	length := make([]byte, 4)
+	length[0] = byte((len(errorMsg) + 4) >> 24)
+	length[1] = byte((len(errorMsg) + 4) >> 16)
+	length[2] = byte((len(errorMsg) + 4) >> 8)
+	length[3] = byte(len(errorMsg) + 4)
+	
+	errorPacket = append(errorPacket, length...)
+	errorPacket = append(errorPacket, []byte(errorMsg)...)
 	conn.Write(errorPacket)
 }
 
-func (h *MySQLHandler) selectBackend(isWrite bool) *config.Backend {
+func (h *PostgreSQLHandler) selectBackend(isWrite bool) *config.Backend {
 	var backends []config.Backend
 	if isWrite {
-		backends = h.cfg.GetWriteBackends("mysql")
+		backends = h.cfg.GetWriteBackends("postgresql")
 	} else {
-		backends = h.cfg.GetReadBackends("mysql")
+		backends = h.cfg.GetReadBackends("postgresql")
 	}
 
 	if len(backends) == 0 {
@@ -205,7 +244,7 @@ func (h *MySQLHandler) selectBackend(isWrite bool) *config.Backend {
 	return &backends[idx]
 }
 
-func (h *MySQLHandler) getBackendConnection(backend *config.Backend) (*sql.Conn, error) {
+func (h *PostgreSQLHandler) getBackendConnection(backend *config.Backend) (*sql.Conn, error) {
 	key := fmt.Sprintf("%s:%d", backend.Host, backend.Port)
 	
 	h.poolMu.RLock()
@@ -219,7 +258,7 @@ func (h *MySQLHandler) getBackendConnection(backend *config.Backend) (*sql.Conn,
 	return p.Get()
 }
 
-func (h *MySQLHandler) proxyTraffic(ctx context.Context, client net.Conn, backend *sql.Conn, username, database string) {
+func (h *PostgreSQLHandler) proxyTraffic(ctx context.Context, client net.Conn, backend *sql.Conn, username, database string) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
@@ -245,7 +284,7 @@ func (h *MySQLHandler) proxyTraffic(ctx context.Context, client net.Conn, backen
 							zap.String("user", username),
 							zap.String("database", database),
 							zap.String("reason", reason),
-							zap.String("type", "connection"))
+							zap.String("type", "postgresql_query"))
 						h.sendError(client, "Access to this resource is blocked: "+reason)
 						return
 					}
@@ -259,7 +298,7 @@ func (h *MySQLHandler) proxyTraffic(ctx context.Context, client net.Conn, backen
 						zap.String("attack_type", attackType),
 						zap.String("description", description),
 						zap.String("query", query[:minInt(100, len(query))]))
-					metrics.IncSQLInjection("mysql")
+					metrics.IncSQLInjection("postgresql")
 					h.sendError(client, "Query blocked by security policy: "+attackType)
 					return
 				}
@@ -272,19 +311,20 @@ func (h *MySQLHandler) proxyTraffic(ctx context.Context, client net.Conn, backen
 					return
 				}
 
-				metrics.IncQuery("mysql", h.isWriteQuery(query))
+				metrics.IncQuery("postgresql", h.isWriteQuery(query))
 			}
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
+		// Backend to client proxy would go here
 	}()
 
 	wg.Wait()
 }
 
-func (h *MySQLHandler) isWriteQuery(query string) bool {
+func (h *PostgreSQLHandler) isWriteQuery(query string) bool {
 	return security.IsWriteQuery(query)
 }
 

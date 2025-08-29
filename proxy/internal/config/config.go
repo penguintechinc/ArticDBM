@@ -53,6 +53,12 @@ type Config struct {
 	ConnectionTimeout     time.Duration
 	QueryTimeout          time.Duration
 
+	// Database/Account blocking configuration
+	DefaultDatabaseBlocking bool
+	CustomBlockingEnabled   bool
+	BlockingEnabled         bool
+	SeedDefaultBlocked      bool
+
 	ClusterMode      bool
 	ClusterRedisAddr string
 
@@ -118,6 +124,13 @@ func LoadConfig() *Config {
 		MaxConnections:        getEnvAsInt("MAX_CONNECTIONS", 1000),
 		ConnectionTimeout:     time.Duration(getEnvAsInt("CONNECTION_TIMEOUT", 30)) * time.Second,
 		QueryTimeout:          time.Duration(getEnvAsInt("QUERY_TIMEOUT", 60)) * time.Second,
+		
+		// Database/Account blocking configuration
+		DefaultDatabaseBlocking: getEnvAsBool("DEFAULT_DATABASE_BLOCKING", true),
+		CustomBlockingEnabled:   getEnvAsBool("CUSTOM_BLOCKING_ENABLED", true),
+		BlockingEnabled:         getEnvAsBool("BLOCKING_ENABLED", true),
+		SeedDefaultBlocked:      getEnvAsBool("SEED_DEFAULT_BLOCKED", true),
+		
 		ClusterMode:           getEnvAsBool("CLUSTER_MODE", false),
 		ClusterRedisAddr:      getEnv("CLUSTER_REDIS_ADDR", ""),
 		Users:                 make(map[string]*User),
