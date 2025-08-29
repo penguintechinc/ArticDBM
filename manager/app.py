@@ -9,6 +9,7 @@ import tempfile
 import shutil
 import xml.etree.ElementTree as ET
 import yaml
+import random
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from pathlib import Path
@@ -216,6 +217,20 @@ db.define_table(
     Field('action_taken', 'string', requires=IS_IN_SET(['blocked', 'alerted', 'logged'])),
     Field('match_details', 'text'),
     Field('timestamp', 'datetime', default=datetime.utcnow)
+)
+
+db.define_table(
+    'license_info',
+    Field('license_key', 'string', unique=True),
+    Field('tier', 'string', requires=IS_IN_SET(['community', 'enterprise']), default='community'),
+    Field('features', 'json'),
+    Field('database_count', 'integer', default=0),
+    Field('is_active', 'boolean', default=False),
+    Field('last_validated', 'datetime'),
+    Field('next_validation', 'datetime'),
+    Field('validation_failures', 'integer', default=0),
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    Field('updated_at', 'datetime', update=datetime.utcnow)
 )
 
 class DatabaseServerModel(BaseModel):
@@ -586,6 +601,107 @@ def parse_misp_event(misp_content: str) -> List[Dict[str, Any]]:
         print(f"Error processing MISP data: {e}")
     
     return indicators
+
+def validate_license_with_server(license_key: str) -> Dict[str, any]:
+    """Validate license with license.penguintech.io server"""
+    try:
+        response = requests.post(
+            'https://license.penguintech.io/api/validate',
+            json={'license_key': license_key, 'product': 'articdbm'},
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                'valid': data.get('valid', False),
+                'tier': data.get('tier', 'community'),
+                'features': data.get('features', []),
+                'expires_at': data.get('expires_at'),
+                'error': None
+            }
+        else:
+            return {
+                'valid': False,
+                'tier': 'community',
+                'features': [],
+                'expires_at': None,
+                'error': f'Server returned {response.status_code}'
+            }
+    except Exception as e:
+        return {
+            'valid': False,
+            'tier': 'community',
+            'features': [],
+            'expires_at': None,
+            'error': str(e)
+        }
+
+def get_current_license_info():
+    """Get current license information from database"""
+    license_record = db(db.license_info).select().first()
+    if not license_record:
+        return {
+            'tier': 'community',
+            'features': ['single_threat_intel_feed'],
+            'is_active': False,
+            'database_count': 0
+        }
+    
+    return {
+        'tier': license_record.tier,
+        'features': license_record.features or [],
+        'is_active': license_record.is_active,
+        'database_count': license_record.database_count,
+        'license_key': license_record.license_key if license_record.license_key else None
+    }
+
+def update_license_validation():
+    """Update license validation status"""
+    license_record = db(db.license_info).select().first()
+    if not license_record or not license_record.license_key:
+        return
+    
+    validation_result = validate_license_with_server(license_record.license_key)
+    
+    # Calculate next validation time (random between 45-180 seconds)
+    next_validation = datetime.utcnow() + timedelta(seconds=random.randint(45, 180))
+    
+    if validation_result['valid']:
+        license_record.update_record(
+            tier=validation_result['tier'],
+            features=validation_result['features'],
+            is_active=True,
+            last_validated=datetime.utcnow(),
+            next_validation=next_validation,
+            validation_failures=0
+        )
+    else:
+        failures = license_record.validation_failures + 1
+        # After 3 failures, disable enterprise features
+        is_active = failures < 3
+        
+        license_record.update_record(
+            is_active=is_active,
+            last_validated=datetime.utcnow(),
+            next_validation=next_validation,
+            validation_failures=failures
+        )
+
+def is_enterprise_feature_enabled(feature: str) -> bool:
+    """Check if an enterprise feature is enabled"""
+    license_info = get_current_license_info()
+    
+    if not license_info['is_active'] or license_info['tier'] != 'enterprise':
+        return False
+    
+    return feature in license_info['features']
+
+def get_threat_intel_limit() -> int:
+    """Get the maximum number of threat intel feeds allowed"""
+    if is_enterprise_feature_enabled('unlimited_threat_intel_feeds'):
+        return -1  # Unlimited
+    return 1  # Community limit
 
 def validate_sql_security(content: str) -> Dict[str, any]:
     """Comprehensive SQL security validation"""
@@ -1477,6 +1593,144 @@ def sync_to_redis():
         print(f"Error syncing to Redis: {e}")
         return False
 
+# License Management API Endpoints
+
+@action('api/license', method=['GET'])
+@action.uses(auth, cors)
+def get_license_info():
+    license_info = get_current_license_info()
+    database_count = db(db.managed_database.active == True).count()
+    threat_feed_count = db(db.threat_intel_feed.active == True).count()
+    threat_feed_limit = get_threat_intel_limit()
+    
+    return {
+        'tier': license_info['tier'],
+        'is_active': license_info['is_active'],
+        'features': license_info['features'],
+        'database_count': database_count,
+        'threat_feed_count': threat_feed_count,
+        'threat_feed_limit': threat_feed_limit,
+        'license_key_present': bool(license_info.get('license_key')),
+        'pricing': {
+            'enterprise_per_database': 5.00,
+            'currency': 'USD',
+            'billing_period': 'monthly'
+        }
+    }
+
+@action('api/license', method=['POST'])
+@action.uses(auth, cors, db)
+def activate_license():
+    try:
+        data = request.json
+        license_key = data.get('license_key', '').strip()
+        
+        if not license_key:
+            abort(400, 'License key is required')
+        
+        # Validate with license server
+        validation_result = validate_license_with_server(license_key)
+        
+        if not validation_result['valid']:
+            abort(400, f"Invalid license: {validation_result.get('error', 'License validation failed')}")
+        
+        # Check if license is for ArticDBM enterprise
+        features = validation_result.get('features', [])
+        if 'unlimited_threat_intel_feeds' not in features:
+            abort(400, 'This license does not include ArticDBM Enterprise features')
+        
+        # Update or create license record
+        existing_license = db(db.license_info).select().first()
+        database_count = db(db.managed_database.active == True).count()
+        
+        next_validation = datetime.utcnow() + timedelta(seconds=random.randint(45, 180))
+        
+        if existing_license:
+            existing_license.update_record(
+                license_key=license_key,
+                tier='enterprise',
+                features=features,
+                database_count=database_count,
+                is_active=True,
+                last_validated=datetime.utcnow(),
+                next_validation=next_validation,
+                validation_failures=0
+            )
+        else:
+            db.license_info.insert(
+                license_key=license_key,
+                tier='enterprise',
+                features=features,
+                database_count=database_count,
+                is_active=True,
+                last_validated=datetime.utcnow(),
+                next_validation=next_validation,
+                validation_failures=0
+            )
+        
+        # Log the activation
+        db.audit_log.insert(
+            user_id=auth.user_id,
+            action='activate_license',
+            query=f"Activated enterprise license",
+            result='success',
+            ip_address=request.environ.get('REMOTE_ADDR')
+        )
+        
+        return {
+            'message': 'Enterprise license activated successfully',
+            'tier': 'enterprise',
+            'features': features
+        }
+        
+    except Exception as e:
+        abort(400, str(e))
+
+@action('api/license', method=['DELETE'])
+@action.uses(auth, cors, db)
+def deactivate_license():
+    try:
+        license_record = db(db.license_info).select().first()
+        if license_record:
+            license_record.update_record(
+                license_key=None,
+                tier='community',
+                features=['single_threat_intel_feed'],
+                is_active=False,
+                last_validated=None,
+                next_validation=None,
+                validation_failures=0
+            )
+        
+        # Log the deactivation
+        db.audit_log.insert(
+            user_id=auth.user_id,
+            action='deactivate_license',
+            query=f"Deactivated license - reverted to community",
+            result='success',
+            ip_address=request.environ.get('REMOTE_ADDR')
+        )
+        
+        return {'message': 'License deactivated - reverted to Community edition'}
+        
+    except Exception as e:
+        abort(400, str(e))
+
+async def periodic_license_validation():
+    """Periodic license validation task"""
+    while True:
+        try:
+            license_record = db(db.license_info).select().first()
+            if license_record and license_record.license_key and license_record.next_validation:
+                if datetime.utcnow() >= license_record.next_validation:
+                    update_license_validation()
+            
+            # Check every 30 seconds
+            await asyncio.sleep(30)
+        except Exception as e:
+            print(f"Error in periodic license validation: {e}")
+            await asyncio.sleep(60)
+
 @action('api/sync', method=['POST'])
 @action.uses(auth, cors)
 def manual_sync():
@@ -1670,6 +1924,17 @@ def create_threat_intel_feed():
     try:
         data = request.json
         feed = ThreatIntelFeedModel(**data)
+        
+        # Check license limits
+        current_feed_count = db(db.threat_intel_feed.active == True).count()
+        threat_intel_limit = get_threat_intel_limit()
+        
+        if threat_intel_limit != -1 and current_feed_count >= threat_intel_limit:
+            license_info = get_current_license_info()
+            if license_info['tier'] == 'community':
+                abort(403, f'Community edition is limited to {threat_intel_limit} threat intelligence feed. Upgrade to Enterprise for unlimited feeds.')
+            else:
+                abort(403, f'License limit reached: {threat_intel_limit} feeds maximum.')
         
         feed_id = db.threat_intel_feed.insert(
             name=feed.name,
@@ -2114,6 +2379,7 @@ if __name__ == "__main__":
     
     asyncio.create_task(init_aio_redis())
     asyncio.create_task(periodic_sync())
+    asyncio.create_task(periodic_license_validation())
     
     from py4web import start
     start(host='0.0.0.0', port=8000)
