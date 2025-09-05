@@ -14,6 +14,8 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 from io import StringIO
+import threading
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 from py4web import action, request, response, abort, Session, Cache, DAL, Field
 from py4web.utils.cors import CORS
@@ -24,6 +26,15 @@ import redis.asyncio as aioredis
 import redis
 from pydantic import BaseModel, Field as PydanticField
 import requests
+
+from kubernetes import client, config
+from kubernetes.client.rest import ApiException
+import boto3
+from botocore.exceptions import ClientError, NoCredentialsError
+from google.cloud import sql_v1
+from google.oauth2 import service_account
+import openai
+import anthropic
 
 db = DAL(
     os.getenv("DATABASE_URL", "postgresql://articdbm:articdbm@postgres/articdbm"),
@@ -47,6 +58,14 @@ redis_client = redis.Redis(
 
 aio_redis = None
 
+# Thread pools for performance optimization
+thread_pool = ThreadPoolExecutor(max_workers=10, thread_name_prefix='articdbm-worker')
+cpu_pool = ProcessPoolExecutor(max_workers=4)
+
+# Cache for expensive operations
+operation_cache = {}
+cache_lock = threading.Lock()
+
 async def init_aio_redis():
     global aio_redis
     aio_redis = await aioredis.create_redis_pool(
@@ -54,6 +73,70 @@ async def init_aio_redis():
         password=os.getenv("REDIS_PASSWORD", None),
         db=int(os.getenv("REDIS_DB", 0))
     )
+
+def get_cached_result(key: str) -> Optional[Any]:
+    """Get cached result for expensive operations"""
+    with cache_lock:
+        if key in operation_cache:
+            result, timestamp = operation_cache[key]
+            if datetime.utcnow() - timestamp < timedelta(minutes=5):
+                return result
+            else:
+                del operation_cache[key]
+    return None
+
+def set_cached_result(key: str, result: Any) -> None:
+    """Cache result for expensive operations"""
+    with cache_lock:
+        operation_cache[key] = (result, datetime.utcnow())
+        
+        # Clean old entries if cache gets too large
+        if len(operation_cache) > 100:
+            oldest_keys = sorted(operation_cache.keys(), 
+                               key=lambda k: operation_cache[k][1])[:20]
+            for old_key in oldest_keys:
+                del operation_cache[old_key]
+
+async def run_in_thread(func, *args, **kwargs):
+    """Run CPU-intensive function in thread pool"""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(thread_pool, func, *args, **kwargs)
+
+async def run_in_process(func, *args, **kwargs):
+    """Run CPU-intensive function in process pool"""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(cpu_pool, func, *args, **kwargs)
+
+def batch_database_operations(operations: List[callable], batch_size: int = 50):
+    """Execute database operations in batches for better performance"""
+    results = []
+    for i in range(0, len(operations), batch_size):
+        batch = operations[i:i + batch_size]
+        batch_results = []
+        
+        # Start a transaction for the batch
+        db._adapter.execute('BEGIN')
+        try:
+            for op in batch:
+                batch_results.append(op())
+            db._adapter.execute('COMMIT')
+            results.extend(batch_results)
+        except Exception as e:
+            db._adapter.execute('ROLLBACK')
+            raise e
+    
+    return results
+
+async def parallel_api_calls(api_calls: List[tuple]) -> List[Any]:
+    """Execute multiple API calls in parallel"""
+    tasks = []
+    for func, args, kwargs in api_calls:
+        if asyncio.iscoroutinefunction(func):
+            tasks.append(func(*args, **kwargs))
+        else:
+            tasks.append(run_in_thread(func, *args, **kwargs))
+    
+    return await asyncio.gather(*tasks, return_exceptions=True)
 
 db.define_table(
     'database_server',
@@ -269,6 +352,76 @@ db.define_table(
     Field('updated_at', 'datetime', update=datetime.utcnow)
 )
 
+db.define_table(
+    'cloud_provider',
+    Field('name', 'string', required=True),
+    Field('provider_type', 'string', requires=IS_IN_SET(['kubernetes', 'aws', 'gcp']), required=True),
+    Field('configuration', 'json', required=True),
+    Field('credentials_path', 'string'),
+    Field('is_active', 'boolean', default=True),
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    Field('updated_at', 'datetime', update=datetime.utcnow),
+    Field('last_tested', 'datetime'),
+    Field('test_status', 'string', requires=IS_IN_SET(['success', 'failed', 'pending']), default='pending')
+)
+
+db.define_table(
+    'cloud_database_instance',
+    Field('name', 'string', required=True),
+    Field('provider_id', 'reference cloud_provider', required=True),
+    Field('instance_type', 'string', requires=IS_IN_SET(['mysql', 'postgresql', 'mssql', 'mongodb', 'redis']), required=True),
+    Field('instance_class', 'string'),
+    Field('storage_size', 'integer'),
+    Field('engine_version', 'string'),
+    Field('multi_az', 'boolean', default=False),
+    Field('backup_retention', 'integer', default=7),
+    Field('monitoring_enabled', 'boolean', default=True),
+    Field('auto_scaling_enabled', 'boolean', default=False),
+    Field('auto_scaling_config', 'json'),
+    Field('cloud_instance_id', 'string'),
+    Field('endpoint', 'string'),
+    Field('port', 'integer'),
+    Field('status', 'string', requires=IS_IN_SET(['creating', 'available', 'modifying', 'deleting', 'failed']), default='creating'),
+    Field('server_id', 'reference database_server'),
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    Field('updated_at', 'datetime', update=datetime.utcnow),
+    Field('metrics_data', 'json'),
+    Field('last_scaled', 'datetime')
+)
+
+db.define_table(
+    'scaling_policy',
+    Field('cloud_instance_id', 'reference cloud_database_instance', required=True),
+    Field('metric_type', 'string', requires=IS_IN_SET(['cpu', 'memory', 'connections', 'iops']), required=True),
+    Field('scale_up_threshold', 'double', required=True),
+    Field('scale_down_threshold', 'double', required=True),
+    Field('scale_up_adjustment', 'integer', default=1),
+    Field('scale_down_adjustment', 'integer', default=-1),
+    Field('cooldown_period', 'integer', default=300),
+    Field('ai_enabled', 'boolean', default=False),
+    Field('ai_model', 'string', requires=IS_IN_SET(['openai', 'anthropic', 'ollama']), default='openai'),
+    Field('is_active', 'boolean', default=True),
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    Field('updated_at', 'datetime', update=datetime.utcnow)
+)
+
+db.define_table(
+    'scaling_event',
+    Field('cloud_instance_id', 'reference cloud_database_instance', required=True),
+    Field('trigger_type', 'string', requires=IS_IN_SET(['threshold', 'ai', 'manual']), required=True),
+    Field('action', 'string', requires=IS_IN_SET(['scale_up', 'scale_down']), required=True),
+    Field('old_instance_class', 'string'),
+    Field('new_instance_class', 'string'),
+    Field('trigger_metric', 'string'),
+    Field('trigger_value', 'double'),
+    Field('ai_confidence', 'double'),
+    Field('ai_reasoning', 'text'),
+    Field('status', 'string', requires=IS_IN_SET(['pending', 'in_progress', 'completed', 'failed']), default='pending'),
+    Field('error_message', 'text'),
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    Field('completed_at', 'datetime')
+)
+
 class DatabaseServerModel(BaseModel):
     name: str
     type: str
@@ -349,6 +502,38 @@ class DatabaseSecurityConfigModel(BaseModel):
     threat_intel_action: str = 'block'
     custom_rules: Optional[str] = None
     whitelist_patterns: Optional[str] = None
+
+class CloudProviderModel(BaseModel):
+    name: str
+    provider_type: str
+    configuration: Dict[str, Any]
+    credentials_path: Optional[str] = None
+    is_active: bool = True
+
+class CloudDatabaseInstanceModel(BaseModel):
+    name: str
+    provider_id: int
+    instance_type: str
+    instance_class: Optional[str] = None
+    storage_size: Optional[int] = None
+    engine_version: Optional[str] = None
+    multi_az: bool = False
+    backup_retention: int = 7
+    monitoring_enabled: bool = True
+    auto_scaling_enabled: bool = False
+    auto_scaling_config: Optional[Dict[str, Any]] = None
+
+class ScalingPolicyModel(BaseModel):
+    cloud_instance_id: int
+    metric_type: str
+    scale_up_threshold: float
+    scale_down_threshold: float
+    scale_up_adjustment: int = 1
+    scale_down_adjustment: int = -1
+    cooldown_period: int = 300
+    ai_enabled: bool = False
+    ai_model: str = 'openai'
+    is_active: bool = True
 
 def parse_stix_indicators(stix_content: str) -> List[Dict[str, Any]]:
     """Parse STIX 2.x JSON format for threat indicators"""
@@ -2720,6 +2905,1301 @@ def update_database_security_config(database_id):
     except Exception as e:
         abort(400, str(e))
 
+@action('api/cloud-providers', method=['GET'])
+@action.uses(auth, cors, db)
+def get_cloud_providers():
+    providers = []
+    for provider in db(db.cloud_provider.is_active == True).select():
+        providers.append({
+            'id': provider.id,
+            'name': provider.name,
+            'provider_type': provider.provider_type,
+            'is_active': provider.is_active,
+            'test_status': provider.test_status,
+            'created_at': provider.created_at.isoformat() if provider.created_at else None,
+            'last_tested': provider.last_tested.isoformat() if provider.last_tested else None
+        })
+    return {'providers': providers}
+
+@action('api/cloud-providers', method=['POST'])
+@action.uses(auth, cors, db)
+def create_cloud_provider():
+    try:
+        data = request.json
+        provider_data = CloudProviderModel(**data)
+        
+        config_json = provider_data.configuration
+        credentials_path = None
+        
+        if provider_data.credentials_path and os.path.exists(provider_data.credentials_path):
+            credentials_path = provider_data.credentials_path
+        
+        provider_id = db.cloud_provider.insert(
+            name=provider_data.name,
+            provider_type=provider_data.provider_type,
+            configuration=config_json,
+            credentials_path=credentials_path,
+            is_active=provider_data.is_active
+        )
+        
+        asyncio.create_task(test_cloud_provider_async(provider_id))
+        
+        return {'id': provider_id, 'message': 'Cloud provider created successfully'}
+    except Exception as e:
+        abort(400, str(e))
+
+@action('api/cloud-providers/<provider_id:int>/test', method=['POST'])
+@action.uses(auth, cors, db)
+def test_cloud_provider_connection(provider_id):
+    provider = db.cloud_provider[provider_id]
+    if not provider:
+        abort(404, "Provider not found")
+    
+    try:
+        result = test_cloud_provider_sync(provider_id)
+        return {'test_result': result}
+    except Exception as e:
+        return {'test_result': 'failed', 'error': str(e)}
+
+@action('api/cloud-instances', method=['GET'])
+@action.uses(auth, cors, db)
+def get_cloud_instances():
+    instances = []
+    for instance in db().select(db.cloud_database_instance.ALL):
+        provider = db.cloud_provider[instance.provider_id]
+        instances.append({
+            'id': instance.id,
+            'name': instance.name,
+            'provider_name': provider.name if provider else 'Unknown',
+            'instance_type': instance.instance_type,
+            'instance_class': instance.instance_class,
+            'status': instance.status,
+            'endpoint': instance.endpoint,
+            'port': instance.port,
+            'created_at': instance.created_at.isoformat() if instance.created_at else None
+        })
+    return {'instances': instances}
+
+@action('api/cloud-instances', method=['POST'])
+@action.uses(auth, cors, db)
+def create_cloud_instance():
+    try:
+        data = request.json
+        instance_data = CloudDatabaseInstanceModel(**data)
+        
+        provider = db.cloud_provider[instance_data.provider_id]
+        if not provider:
+            abort(404, "Provider not found")
+        
+        instance_id = db.cloud_database_instance.insert(
+            name=instance_data.name,
+            provider_id=instance_data.provider_id,
+            instance_type=instance_data.instance_type,
+            instance_class=instance_data.instance_class,
+            storage_size=instance_data.storage_size,
+            engine_version=instance_data.engine_version,
+            multi_az=instance_data.multi_az,
+            backup_retention=instance_data.backup_retention,
+            monitoring_enabled=instance_data.monitoring_enabled,
+            auto_scaling_enabled=instance_data.auto_scaling_enabled,
+            auto_scaling_config=instance_data.auto_scaling_config
+        )
+        
+        asyncio.create_task(provision_cloud_instance_async(instance_id))
+        
+        return {'id': instance_id, 'message': 'Cloud instance creation initiated'}
+    except Exception as e:
+        abort(400, str(e))
+
+@action('api/cloud-instances/<instance_id:int>/scale', method=['POST'])
+@action.uses(auth, cors, db)
+def scale_cloud_instance(instance_id):
+    try:
+        data = request.json
+        action_type = data.get('action', 'scale_up')
+        new_instance_class = data.get('instance_class')
+        ai_enabled = data.get('ai_enabled', False)
+        
+        instance = db.cloud_database_instance[instance_id]
+        if not instance:
+            abort(404, "Instance not found")
+        
+        if ai_enabled:
+            asyncio.create_task(ai_scale_recommendation_async(instance_id, action_type))
+        else:
+            asyncio.create_task(manual_scale_instance_async(instance_id, action_type, new_instance_class))
+        
+        return {'message': f'Scaling {action_type} initiated for instance {instance.name}'}
+    except Exception as e:
+        abort(400, str(e))
+
+@action('api/scaling-policies', method=['GET'])
+@action.uses(auth, cors, db)
+def get_scaling_policies():
+    policies = []
+    for policy in db().select(db.scaling_policy.ALL):
+        instance = db.cloud_database_instance[policy.cloud_instance_id]
+        policies.append({
+            'id': policy.id,
+            'instance_name': instance.name if instance else 'Unknown',
+            'metric_type': policy.metric_type,
+            'scale_up_threshold': policy.scale_up_threshold,
+            'scale_down_threshold': policy.scale_down_threshold,
+            'ai_enabled': policy.ai_enabled,
+            'ai_model': policy.ai_model,
+            'is_active': policy.is_active
+        })
+    return {'policies': policies}
+
+@action('api/scaling-policies', method=['POST'])
+@action.uses(auth, cors, db)
+def create_scaling_policy():
+    try:
+        data = request.json
+        policy_data = ScalingPolicyModel(**data)
+        
+        instance = db.cloud_database_instance[policy_data.cloud_instance_id]
+        if not instance:
+            abort(404, "Instance not found")
+        
+        policy_id = db.scaling_policy.insert(
+            cloud_instance_id=policy_data.cloud_instance_id,
+            metric_type=policy_data.metric_type,
+            scale_up_threshold=policy_data.scale_up_threshold,
+            scale_down_threshold=policy_data.scale_down_threshold,
+            scale_up_adjustment=policy_data.scale_up_adjustment,
+            scale_down_adjustment=policy_data.scale_down_adjustment,
+            cooldown_period=policy_data.cooldown_period,
+            ai_enabled=policy_data.ai_enabled,
+            ai_model=policy_data.ai_model,
+            is_active=policy_data.is_active
+        )
+        
+        return {'id': policy_id, 'message': 'Scaling policy created successfully'}
+    except Exception as e:
+        abort(400, str(e))
+
+async def test_cloud_provider_async(provider_id):
+    """Asynchronously test cloud provider connection"""
+    provider = db.cloud_provider[provider_id]
+    if not provider:
+        return False
+    
+    try:
+        result = await asyncio.get_event_loop().run_in_executor(
+            None, test_cloud_provider_sync, provider_id
+        )
+        
+        db.cloud_provider[provider_id] = dict(
+            test_status='success' if result else 'failed',
+            last_tested=datetime.utcnow()
+        )
+        db.commit()
+        return result
+    except Exception as e:
+        db.cloud_provider[provider_id] = dict(
+            test_status='failed',
+            last_tested=datetime.utcnow()
+        )
+        db.commit()
+        return False
+
+def test_cloud_provider_sync(provider_id):
+    """Synchronously test cloud provider connection"""
+    provider = db.cloud_provider[provider_id]
+    if not provider:
+        return False
+    
+    try:
+        if provider.provider_type == 'kubernetes':
+            return test_kubernetes_connection(provider)
+        elif provider.provider_type == 'aws':
+            return test_aws_connection(provider)
+        elif provider.provider_type == 'gcp':
+            return test_gcp_connection(provider)
+        return False
+    except Exception as e:
+        print(f"Error testing cloud provider {provider.name}: {e}")
+        return False
+
+def test_kubernetes_connection(provider):
+    """Test Kubernetes cluster connectivity"""
+    try:
+        config_data = provider.configuration
+        
+        if provider.credentials_path:
+            config.load_kube_config(config_file=provider.credentials_path)
+        else:
+            config.load_incluster_config()
+        
+        v1 = client.CoreV1Api()
+        namespaces = v1.list_namespace(timeout_seconds=10)
+        return len(namespaces.items) >= 0
+    except Exception as e:
+        print(f"Kubernetes connection test failed: {e}")
+        return False
+
+def test_aws_connection(provider):
+    """Test AWS credentials and connectivity"""
+    try:
+        config_data = provider.configuration
+        
+        if provider.credentials_path:
+            import json
+            with open(provider.credentials_path, 'r') as f:
+                creds = json.load(f)
+            
+            session = boto3.Session(
+                aws_access_key_id=creds.get('access_key_id'),
+                aws_secret_access_key=creds.get('secret_access_key'),
+                region_name=config_data.get('region', 'us-east-1')
+            )
+        else:
+            session = boto3.Session(region_name=config_data.get('region', 'us-east-1'))
+        
+        rds = session.client('rds')
+        rds.describe_db_instances(MaxRecords=1)
+        return True
+    except Exception as e:
+        print(f"AWS connection test failed: {e}")
+        return False
+
+def test_gcp_connection(provider):
+    """Test GCP service account and connectivity"""
+    try:
+        config_data = provider.configuration
+        
+        if provider.credentials_path:
+            credentials = service_account.Credentials.from_service_account_file(
+                provider.credentials_path
+            )
+        else:
+            credentials = service_account.Credentials.from_service_account_file(
+                config_data.get('service_account_path')
+            )
+        
+        client_obj = sql_v1.SqlInstancesServiceClient(credentials=credentials)
+        project_id = config_data.get('project_id')
+        
+        request = sql_v1.SqlInstancesListRequest(project=project_id)
+        client_obj.list(request=request)
+        return True
+    except Exception as e:
+        print(f"GCP connection test failed: {e}")
+        return False
+
+async def provision_cloud_instance_async(instance_id):
+    """Asynchronously provision cloud database instance"""
+    instance = db.cloud_database_instance[instance_id]
+    provider = db.cloud_provider[instance.provider_id]
+    
+    if not instance or not provider:
+        return False
+    
+    try:
+        if provider.provider_type == 'kubernetes':
+            result = await provision_kubernetes_database(instance, provider)
+        elif provider.provider_type == 'aws':
+            result = await provision_aws_database(instance, provider)
+        elif provider.provider_type == 'gcp':
+            result = await provision_gcp_database(instance, provider)
+        else:
+            result = False
+        
+        if result:
+            db.cloud_database_instance[instance_id] = dict(status='available')
+        else:
+            db.cloud_database_instance[instance_id] = dict(status='failed')
+        
+        db.commit()
+        return result
+    except Exception as e:
+        print(f"Error provisioning instance: {e}")
+        db.cloud_database_instance[instance_id] = dict(status='failed')
+        db.commit()
+        return False
+
+async def provision_kubernetes_database(instance, provider):
+    """Provision database in Kubernetes"""
+    try:
+        if provider.credentials_path:
+            config.load_kube_config(config_file=provider.credentials_path)
+        else:
+            config.load_incluster_config()
+        
+        apps_v1 = client.AppsV1Api()
+        v1 = client.CoreV1Api()
+        
+        namespace = provider.configuration.get('namespace', 'default')
+        
+        deployment_manifest = create_k8s_database_deployment(instance, provider)
+        service_manifest = create_k8s_database_service(instance, provider)
+        
+        deployment = apps_v1.create_namespaced_deployment(
+            namespace=namespace,
+            body=deployment_manifest
+        )
+        
+        service = v1.create_namespaced_service(
+            namespace=namespace,
+            body=service_manifest
+        )
+        
+        endpoint = f"{service.metadata.name}.{namespace}.svc.cluster.local"
+        port = service.spec.ports[0].port
+        
+        db.cloud_database_instance[instance.id] = dict(
+            cloud_instance_id=deployment.metadata.name,
+            endpoint=endpoint,
+            port=port
+        )
+        
+        server_id = create_database_server_entry(instance, endpoint, port)
+        db.cloud_database_instance[instance.id] = dict(server_id=server_id)
+        
+        db.commit()
+        return True
+    except Exception as e:
+        print(f"Error provisioning Kubernetes database: {e}")
+        return False
+
+async def provision_aws_database(instance, provider):
+    """Provision database in AWS RDS"""
+    try:
+        config_data = provider.configuration
+        
+        if provider.credentials_path:
+            import json
+            with open(provider.credentials_path, 'r') as f:
+                creds = json.load(f)
+            
+            session = boto3.Session(
+                aws_access_key_id=creds.get('access_key_id'),
+                aws_secret_access_key=creds.get('secret_access_key'),
+                region_name=config_data.get('region', 'us-east-1')
+            )
+        else:
+            session = boto3.Session(region_name=config_data.get('region', 'us-east-1'))
+        
+        rds = session.client('rds')
+        
+        db_params = {
+            'DBInstanceIdentifier': f"articdbm-{instance.name}",
+            'DBInstanceClass': instance.instance_class or 'db.t3.micro',
+            'Engine': map_instance_type_to_aws_engine(instance.instance_type),
+            'MasterUsername': 'articdbm',
+            'MasterUserPassword': secrets.token_urlsafe(16),
+            'AllocatedStorage': instance.storage_size or 20,
+            'StorageType': 'gp2',
+            'MultiAZ': instance.multi_az,
+            'BackupRetentionPeriod': instance.backup_retention,
+            'MonitoringInterval': 60 if instance.monitoring_enabled else 0,
+            'VpcSecurityGroupIds': config_data.get('security_group_ids', []),
+            'DBSubnetGroupName': config_data.get('subnet_group_name')
+        }
+        
+        if instance.engine_version:
+            db_params['EngineVersion'] = instance.engine_version
+        
+        response = rds.create_db_instance(**db_params)
+        
+        db_instance = response['DBInstance']
+        
+        db.cloud_database_instance[instance.id] = dict(
+            cloud_instance_id=db_instance['DBInstanceIdentifier']
+        )
+        
+        await wait_for_aws_instance_available(rds, db_instance['DBInstanceIdentifier'])
+        
+        instance_details = rds.describe_db_instances(
+            DBInstanceIdentifier=db_instance['DBInstanceIdentifier']
+        )['DBInstances'][0]
+        
+        endpoint = instance_details['Endpoint']['Address']
+        port = instance_details['Endpoint']['Port']
+        
+        db.cloud_database_instance[instance.id] = dict(
+            endpoint=endpoint,
+            port=port
+        )
+        
+        server_id = create_database_server_entry(instance, endpoint, port)
+        db.cloud_database_instance[instance.id] = dict(server_id=server_id)
+        
+        db.commit()
+        return True
+    except Exception as e:
+        print(f"Error provisioning AWS database: {e}")
+        return False
+
+async def provision_gcp_database(instance, provider):
+    """Provision database in Google Cloud SQL"""
+    try:
+        config_data = provider.configuration
+        
+        if provider.credentials_path:
+            credentials = service_account.Credentials.from_service_account_file(
+                provider.credentials_path
+            )
+        else:
+            credentials = service_account.Credentials.from_service_account_file(
+                config_data.get('service_account_path')
+            )
+        
+        client_obj = sql_v1.SqlInstancesServiceClient(credentials=credentials)
+        project_id = config_data.get('project_id')
+        
+        instance_body = sql_v1.DatabaseInstance()
+        instance_body.name = f"articdbm-{instance.name}"
+        instance_body.database_version = map_instance_type_to_gcp_version(instance.instance_type, instance.engine_version)
+        instance_body.region = config_data.get('region', 'us-central1')
+        
+        settings = sql_v1.Settings()
+        settings.tier = instance.instance_class or 'db-f1-micro'
+        settings.disk_size_gb = instance.storage_size or 20
+        settings.disk_type = 'PD_SSD'
+        
+        backup_config = sql_v1.BackupConfiguration()
+        backup_config.enabled = True
+        backup_config.start_time = "03:00"
+        
+        settings.backup_configuration = backup_config
+        instance_body.settings = settings
+        
+        request = sql_v1.SqlInstancesInsertRequest(
+            project=project_id,
+            body=instance_body
+        )
+        
+        operation = client_obj.insert(request=request)
+        
+        db.cloud_database_instance[instance.id] = dict(
+            cloud_instance_id=instance_body.name
+        )
+        
+        await wait_for_gcp_operation(client_obj, project_id, operation.name)
+        
+        instance_request = sql_v1.SqlInstancesGetRequest(
+            project=project_id,
+            instance=instance_body.name
+        )
+        gcp_instance = client_obj.get(request=instance_request)
+        
+        endpoint = gcp_instance.ip_addresses[0].ip_address
+        port = 3306 if instance.instance_type == 'mysql' else 5432
+        
+        db.cloud_database_instance[instance.id] = dict(
+            endpoint=endpoint,
+            port=port
+        )
+        
+        server_id = create_database_server_entry(instance, endpoint, port)
+        db.cloud_database_instance[instance.id] = dict(server_id=server_id)
+        
+        db.commit()
+        return True
+    except Exception as e:
+        print(f"Error provisioning GCP database: {e}")
+        return False
+
+def create_database_server_entry(instance, endpoint, port):
+    """Create corresponding database_server entry for cloud instance"""
+    try:
+        server_id = db.database_server.insert(
+            name=f"cloud-{instance.name}",
+            type=instance.instance_type,
+            host=endpoint,
+            port=port,
+            username='articdbm',
+            password='managed-by-cloud',
+            active=True
+        )
+        
+        sync_to_redis()
+        return server_id
+    except Exception as e:
+        print(f"Error creating database server entry: {e}")
+        return None
+
+def create_k8s_database_deployment(instance, provider):
+    """Create Kubernetes deployment manifest for database"""
+    deployment_name = f"articdbm-{instance.instance_type}-{instance.name}"
+    
+    containers = []
+    if instance.instance_type == 'mysql':
+        containers.append({
+            'name': 'mysql',
+            'image': 'mysql:8.0',
+            'env': [
+                {'name': 'MYSQL_ROOT_PASSWORD', 'value': 'articdbm123'},
+                {'name': 'MYSQL_DATABASE', 'value': 'articdbm'},
+                {'name': 'MYSQL_USER', 'value': 'articdbm'},
+                {'name': 'MYSQL_PASSWORD', 'value': 'articdbm'}
+            ],
+            'ports': [{'containerPort': 3306}],
+            'resources': {
+                'requests': {'memory': '256Mi', 'cpu': '250m'},
+                'limits': {'memory': '512Mi', 'cpu': '500m'}
+            }
+        })
+    elif instance.instance_type == 'postgresql':
+        containers.append({
+            'name': 'postgresql',
+            'image': 'postgres:15',
+            'env': [
+                {'name': 'POSTGRES_DB', 'value': 'articdbm'},
+                {'name': 'POSTGRES_USER', 'value': 'articdbm'},
+                {'name': 'POSTGRES_PASSWORD', 'value': 'articdbm'}
+            ],
+            'ports': [{'containerPort': 5432}],
+            'resources': {
+                'requests': {'memory': '256Mi', 'cpu': '250m'},
+                'limits': {'memory': '512Mi', 'cpu': '500m'}
+            }
+        })
+    elif instance.instance_type == 'redis':
+        containers.append({
+            'name': 'redis',
+            'image': 'redis:7',
+            'ports': [{'containerPort': 6379}],
+            'resources': {
+                'requests': {'memory': '128Mi', 'cpu': '100m'},
+                'limits': {'memory': '256Mi', 'cpu': '200m'}
+            }
+        })
+    
+    return {
+        'apiVersion': 'apps/v1',
+        'kind': 'Deployment',
+        'metadata': {
+            'name': deployment_name,
+            'labels': {
+                'app': deployment_name,
+                'managed-by': 'articdbm'
+            }
+        },
+        'spec': {
+            'replicas': 1,
+            'selector': {
+                'matchLabels': {
+                    'app': deployment_name
+                }
+            },
+            'template': {
+                'metadata': {
+                    'labels': {
+                        'app': deployment_name
+                    }
+                },
+                'spec': {
+                    'containers': containers
+                }
+            }
+        }
+    }
+
+def create_k8s_database_service(instance, provider):
+    """Create Kubernetes service manifest for database"""
+    service_name = f"articdbm-{instance.instance_type}-{instance.name}"
+    deployment_name = f"articdbm-{instance.instance_type}-{instance.name}"
+    
+    port = 3306
+    if instance.instance_type == 'postgresql':
+        port = 5432
+    elif instance.instance_type == 'redis':
+        port = 6379
+    
+    return {
+        'apiVersion': 'v1',
+        'kind': 'Service',
+        'metadata': {
+            'name': service_name,
+            'labels': {
+                'app': deployment_name,
+                'managed-by': 'articdbm'
+            }
+        },
+        'spec': {
+            'selector': {
+                'app': deployment_name
+            },
+            'ports': [{
+                'protocol': 'TCP',
+                'port': port,
+                'targetPort': port
+            }],
+            'type': 'ClusterIP'
+        }
+    }
+
+def map_instance_type_to_aws_engine(instance_type):
+    """Map ArticDBM instance type to AWS RDS engine"""
+    mapping = {
+        'mysql': 'mysql',
+        'postgresql': 'postgres',
+        'mssql': 'sqlserver-ex',
+        'redis': 'redis'
+    }
+    return mapping.get(instance_type, 'mysql')
+
+def map_instance_type_to_gcp_version(instance_type, engine_version=None):
+    """Map ArticDBM instance type to GCP SQL database version"""
+    if engine_version:
+        return engine_version
+    
+    mapping = {
+        'mysql': 'MYSQL_8_0',
+        'postgresql': 'POSTGRES_15',
+        'mssql': 'SQLSERVER_2019_STANDARD'
+    }
+    return mapping.get(instance_type, 'MYSQL_8_0')
+
+async def wait_for_aws_instance_available(rds_client, db_instance_id):
+    """Wait for AWS RDS instance to become available"""
+    max_attempts = 60
+    attempt = 0
+    
+    while attempt < max_attempts:
+        try:
+            response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance_id)
+            status = response['DBInstances'][0]['DBInstanceStatus']
+            
+            if status == 'available':
+                return True
+            elif status in ['failed', 'stopped']:
+                return False
+            
+            await asyncio.sleep(30)
+            attempt += 1
+        except Exception as e:
+            print(f"Error checking AWS instance status: {e}")
+            await asyncio.sleep(30)
+            attempt += 1
+    
+    return False
+
+async def wait_for_gcp_operation(client_obj, project_id, operation_name):
+    """Wait for GCP SQL operation to complete"""
+    max_attempts = 60
+    attempt = 0
+    
+    while attempt < max_attempts:
+        try:
+            request = sql_v1.SqlOperationsGetRequest(
+                project=project_id,
+                operation=operation_name
+            )
+            operation = client_obj.get_operation(request=request)
+            
+            if operation.status == sql_v1.Operation.Status.DONE:
+                return True
+            elif operation.status == sql_v1.Operation.Status.ERROR:
+                return False
+            
+            await asyncio.sleep(30)
+            attempt += 1
+        except Exception as e:
+            print(f"Error checking GCP operation status: {e}")
+            await asyncio.sleep(30)
+            attempt += 1
+    
+    return False
+
+async def ai_scale_recommendation_async(instance_id, action_type):
+    """Get AI-powered scaling recommendations"""
+    try:
+        instance = db.cloud_database_instance[instance_id]
+        if not instance:
+            return False
+        
+        policies = db(db.scaling_policy.cloud_instance_id == instance_id).select()
+        ai_policy = None
+        
+        for policy in policies:
+            if policy.ai_enabled:
+                ai_policy = policy
+                break
+        
+        if not ai_policy:
+            return False
+        
+        metrics_data = instance.metrics_data or {}
+        
+        if ai_policy.ai_model == 'openai':
+            recommendation = await get_openai_scaling_recommendation(instance, metrics_data, action_type)
+        elif ai_policy.ai_model == 'anthropic':
+            recommendation = await get_anthropic_scaling_recommendation(instance, metrics_data, action_type)
+        else:
+            recommendation = await get_ollama_scaling_recommendation(instance, metrics_data, action_type)
+        
+        if recommendation:
+            event_id = db.scaling_event.insert(
+                cloud_instance_id=instance_id,
+                trigger_type='ai',
+                action=action_type,
+                old_instance_class=instance.instance_class,
+                new_instance_class=recommendation.get('recommended_class'),
+                ai_confidence=recommendation.get('confidence', 0.5),
+                ai_reasoning=recommendation.get('reasoning'),
+                status='pending'
+            )
+            
+            if recommendation.get('should_scale', False):
+                await execute_scaling_action(instance_id, recommendation.get('recommended_class'))
+        
+        return True
+    except Exception as e:
+        print(f"Error in AI scaling recommendation: {e}")
+        return False
+
+async def get_openai_scaling_recommendation(instance, metrics, action_type):
+    """Get scaling recommendation from OpenAI"""
+    try:
+        client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        
+        prompt = f"""
+        Analyze the following database instance metrics and recommend scaling action:
+        
+        Instance: {instance.name}
+        Type: {instance.instance_type}
+        Current Class: {instance.instance_class}
+        Metrics: {json.dumps(metrics, indent=2)}
+        Requested Action: {action_type}
+        
+        Provide a JSON response with:
+        - should_scale: boolean
+        - recommended_class: string (new instance class)
+        - confidence: float (0.0-1.0)
+        - reasoning: string (explanation)
+        """
+        
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a database performance optimization expert. Analyze metrics and provide scaling recommendations in JSON format."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3
+        )
+        
+        content = response.choices[0].message.content
+        return json.loads(content)
+    except Exception as e:
+        print(f"Error getting OpenAI recommendation: {e}")
+        return None
+
+async def get_anthropic_scaling_recommendation(instance, metrics, action_type):
+    """Get scaling recommendation from Anthropic Claude"""
+    try:
+        client = anthropic.Client(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        
+        prompt = f"""
+        Analyze the following database instance metrics and recommend scaling action:
+        
+        Instance: {instance.name}
+        Type: {instance.instance_type}
+        Current Class: {instance.instance_class}
+        Metrics: {json.dumps(metrics, indent=2)}
+        Requested Action: {action_type}
+        
+        Provide a JSON response with:
+        - should_scale: boolean
+        - recommended_class: string (new instance class)
+        - confidence: float (0.0-1.0)
+        - reasoning: string (explanation)
+        """
+        
+        message = client.messages.create(
+            model="claude-3-sonnet-20240229",
+            max_tokens=1000,
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
+        
+        return json.loads(message.content[0].text)
+    except Exception as e:
+        print(f"Error getting Anthropic recommendation: {e}")
+        return None
+
+async def get_ollama_scaling_recommendation(instance, metrics, action_type):
+    """Get scaling recommendation from Ollama (local LLM)"""
+    try:
+        ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
+        
+        prompt = f"""
+        Analyze database metrics and recommend scaling:
+        Instance: {instance.name}, Type: {instance.instance_type}
+        Current: {instance.instance_class}, Action: {action_type}
+        Metrics: {json.dumps(metrics)}
+        
+        JSON response: should_scale, recommended_class, confidence, reasoning
+        """
+        
+        response = requests.post(f"{ollama_url}/api/generate", json={
+            "model": "llama2:7b",
+            "prompt": prompt,
+            "stream": False
+        })
+        
+        if response.status_code == 200:
+            result = response.json()
+            return json.loads(result['response'])
+        return None
+    except Exception as e:
+        print(f"Error getting Ollama recommendation: {e}")
+        return None
+
+async def manual_scale_instance_async(instance_id, action_type, new_instance_class):
+    """Manual scaling without AI"""
+    try:
+        instance = db.cloud_database_instance[instance_id]
+        if not instance:
+            return False
+        
+        event_id = db.scaling_event.insert(
+            cloud_instance_id=instance_id,
+            trigger_type='manual',
+            action=action_type,
+            old_instance_class=instance.instance_class,
+            new_instance_class=new_instance_class,
+            status='pending'
+        )
+        
+        success = await execute_scaling_action(instance_id, new_instance_class)
+        
+        db.scaling_event[event_id] = dict(
+            status='completed' if success else 'failed',
+            completed_at=datetime.utcnow()
+        )
+        db.commit()
+        
+        return success
+    except Exception as e:
+        print(f"Error in manual scaling: {e}")
+        return False
+
+async def execute_scaling_action(instance_id, new_instance_class):
+    """Execute the actual scaling operation"""
+    try:
+        instance = db.cloud_database_instance[instance_id]
+        provider = db.cloud_provider[instance.provider_id]
+        
+        if provider.provider_type == 'aws':
+            success = await scale_aws_instance(instance, provider, new_instance_class)
+        elif provider.provider_type == 'gcp':
+            success = await scale_gcp_instance(instance, provider, new_instance_class)
+        elif provider.provider_type == 'kubernetes':
+            success = await scale_kubernetes_instance(instance, provider, new_instance_class)
+        else:
+            success = False
+        
+        if success:
+            db.cloud_database_instance[instance_id] = dict(
+                instance_class=new_instance_class,
+                last_scaled=datetime.utcnow()
+            )
+            db.commit()
+        
+        return success
+    except Exception as e:
+        print(f"Error executing scaling action: {e}")
+        return False
+
+async def scale_aws_instance(instance, provider, new_instance_class):
+    """Scale AWS RDS instance"""
+    try:
+        config_data = provider.configuration
+        
+        if provider.credentials_path:
+            import json
+            with open(provider.credentials_path, 'r') as f:
+                creds = json.load(f)
+            
+            session = boto3.Session(
+                aws_access_key_id=creds.get('access_key_id'),
+                aws_secret_access_key=creds.get('secret_access_key'),
+                region_name=config_data.get('region', 'us-east-1')
+            )
+        else:
+            session = boto3.Session(region_name=config_data.get('region', 'us-east-1'))
+        
+        rds = session.client('rds')
+        
+        rds.modify_db_instance(
+            DBInstanceIdentifier=instance.cloud_instance_id,
+            DBInstanceClass=new_instance_class,
+            ApplyImmediately=True
+        )
+        
+        return True
+    except Exception as e:
+        print(f"Error scaling AWS instance: {e}")
+        return False
+
+async def scale_gcp_instance(instance, provider, new_instance_class):
+    """Scale GCP Cloud SQL instance"""
+    try:
+        config_data = provider.configuration
+        
+        if provider.credentials_path:
+            credentials = service_account.Credentials.from_service_account_file(
+                provider.credentials_path
+            )
+        else:
+            credentials = service_account.Credentials.from_service_account_file(
+                config_data.get('service_account_path')
+            )
+        
+        client_obj = sql_v1.SqlInstancesServiceClient(credentials=credentials)
+        project_id = config_data.get('project_id')
+        
+        instance_body = sql_v1.DatabaseInstance()
+        settings = sql_v1.Settings()
+        settings.tier = new_instance_class
+        instance_body.settings = settings
+        
+        request = sql_v1.SqlInstancesPatchRequest(
+            project=project_id,
+            instance=instance.cloud_instance_id,
+            body=instance_body
+        )
+        
+        operation = client_obj.patch(request=request)
+        await wait_for_gcp_operation(client_obj, project_id, operation.name)
+        
+        return True
+    except Exception as e:
+        print(f"Error scaling GCP instance: {e}")
+        return False
+
+async def scale_kubernetes_instance(instance, provider, new_instance_class):
+    """Scale Kubernetes database deployment"""
+    try:
+        if provider.credentials_path:
+            config.load_kube_config(config_file=provider.credentials_path)
+        else:
+            config.load_incluster_config()
+        
+        apps_v1 = client.AppsV1Api()
+        namespace = provider.configuration.get('namespace', 'default')
+        deployment_name = instance.cloud_instance_id
+        
+        deployment = apps_v1.read_namespaced_deployment(
+            name=deployment_name,
+            namespace=namespace
+        )
+        
+        resource_map = {
+            'small': {'memory': '256Mi', 'cpu': '250m'},
+            'medium': {'memory': '512Mi', 'cpu': '500m'},
+            'large': {'memory': '1Gi', 'cpu': '1000m'},
+            'xlarge': {'memory': '2Gi', 'cpu': '2000m'}
+        }
+        
+        resources = resource_map.get(new_instance_class, resource_map['medium'])
+        
+        deployment.spec.template.spec.containers[0].resources.requests = resources
+        deployment.spec.template.spec.containers[0].resources.limits = resources
+        
+        apps_v1.patch_namespaced_deployment(
+            name=deployment_name,
+            namespace=namespace,
+            body=deployment
+        )
+        
+        return True
+    except Exception as e:
+        print(f"Error scaling Kubernetes instance: {e}")
+        return False
+
+async def periodic_scaling_check():
+    """Periodically check scaling policies and trigger scaling if needed"""
+    while True:
+        try:
+            active_policies = db(
+                (db.scaling_policy.is_active == True) & 
+                (db.cloud_database_instance.id == db.scaling_policy.cloud_instance_id) &
+                (db.cloud_database_instance.status == 'available')
+            ).select()
+            
+            for policy in active_policies:
+                instance = db.cloud_database_instance[policy.cloud_instance_id]
+                
+                should_scale = await check_scaling_thresholds(policy, instance)
+                if should_scale:
+                    if policy.ai_enabled:
+                        await ai_scale_recommendation_async(instance.id, should_scale)
+                    else:
+                        await trigger_threshold_scaling(policy, instance, should_scale)
+            
+        except Exception as e:
+            print(f"Error in periodic scaling check: {e}")
+        
+        await asyncio.sleep(300)
+
+async def check_scaling_thresholds(policy, instance):
+    """Check if instance metrics exceed scaling thresholds"""
+    try:
+        metrics = await collect_instance_metrics(instance)
+        if not metrics:
+            return None
+        
+        metric_value = metrics.get(policy.metric_type, 0)
+        
+        if metric_value >= policy.scale_up_threshold:
+            return 'scale_up'
+        elif metric_value <= policy.scale_down_threshold:
+            return 'scale_down'
+        
+        return None
+    except Exception as e:
+        print(f"Error checking scaling thresholds: {e}")
+        return None
+
+async def collect_instance_metrics(instance):
+    """Collect metrics for cloud database instance"""
+    try:
+        provider = db.cloud_provider[instance.provider_id]
+        
+        if provider.provider_type == 'aws':
+            return await collect_aws_metrics(instance, provider)
+        elif provider.provider_type == 'gcp':
+            return await collect_gcp_metrics(instance, provider)
+        elif provider.provider_type == 'kubernetes':
+            return await collect_k8s_metrics(instance, provider)
+        
+        return {}
+    except Exception as e:
+        print(f"Error collecting instance metrics: {e}")
+        return {}
+
+async def collect_aws_metrics(instance, provider):
+    """Collect CloudWatch metrics for AWS RDS"""
+    try:
+        config_data = provider.configuration
+        
+        if provider.credentials_path:
+            import json
+            with open(provider.credentials_path, 'r') as f:
+                creds = json.load(f)
+            
+            session = boto3.Session(
+                aws_access_key_id=creds.get('access_key_id'),
+                aws_secret_access_key=creds.get('secret_access_key'),
+                region_name=config_data.get('region', 'us-east-1')
+            )
+        else:
+            session = boto3.Session(region_name=config_data.get('region', 'us-east-1'))
+        
+        cloudwatch = session.client('cloudwatch')
+        
+        end_time = datetime.utcnow()
+        start_time = end_time - timedelta(minutes=10)
+        
+        cpu_response = cloudwatch.get_metric_statistics(
+            Namespace='AWS/RDS',
+            MetricName='CPUUtilization',
+            Dimensions=[{
+                'Name': 'DBInstanceIdentifier',
+                'Value': instance.cloud_instance_id
+            }],
+            StartTime=start_time,
+            EndTime=end_time,
+            Period=300,
+            Statistics=['Average']
+        )
+        
+        memory_response = cloudwatch.get_metric_statistics(
+            Namespace='AWS/RDS',
+            MetricName='DatabaseConnections',
+            Dimensions=[{
+                'Name': 'DBInstanceIdentifier',
+                'Value': instance.cloud_instance_id
+            }],
+            StartTime=start_time,
+            EndTime=end_time,
+            Period=300,
+            Statistics=['Average']
+        )
+        
+        metrics = {}
+        
+        if cpu_response['Datapoints']:
+            cpu_avg = sum(dp['Average'] for dp in cpu_response['Datapoints']) / len(cpu_response['Datapoints'])
+            metrics['cpu'] = cpu_avg
+        
+        if memory_response['Datapoints']:
+            conn_avg = sum(dp['Average'] for dp in memory_response['Datapoints']) / len(memory_response['Datapoints'])
+            metrics['connections'] = conn_avg
+        
+        db.cloud_database_instance[instance.id] = dict(metrics_data=metrics)
+        db.commit()
+        
+        return metrics
+    except Exception as e:
+        print(f"Error collecting AWS metrics: {e}")
+        return {}
+
+async def collect_gcp_metrics(instance, provider):
+    """Collect GCP monitoring metrics"""
+    try:
+        from google.cloud import monitoring_v3
+        
+        config_data = provider.configuration
+        
+        if provider.credentials_path:
+            credentials = service_account.Credentials.from_service_account_file(
+                provider.credentials_path
+            )
+        else:
+            credentials = service_account.Credentials.from_service_account_file(
+                config_data.get('service_account_path')
+            )
+        
+        client = monitoring_v3.MetricServiceClient(credentials=credentials)
+        project_name = f"projects/{config_data.get('project_id')}"
+        
+        interval = monitoring_v3.TimeInterval({
+            "end_time": {"seconds": int(datetime.utcnow().timestamp())},
+            "start_time": {"seconds": int((datetime.utcnow() - timedelta(minutes=10)).timestamp())},
+        })
+        
+        cpu_filter = f'resource.type="cloudsql_database" AND resource.labels.database_id="{instance.cloud_instance_id}"'
+        
+        request = monitoring_v3.ListTimeSeriesRequest({
+            "name": project_name,
+            "filter": cpu_filter,
+            "interval": interval,
+            "view": monitoring_v3.ListTimeSeriesRequest.TimeSeriesView.FULL,
+        })
+        
+        results = client.list_time_series(request=request)
+        
+        metrics = {}
+        for result in results:
+            if result.metric.type == "cloudsql.googleapis.com/database/cpu/utilization":
+                if result.points:
+                    cpu_avg = sum(point.value.double_value for point in result.points) / len(result.points)
+                    metrics['cpu'] = cpu_avg * 100
+        
+        db.cloud_database_instance[instance.id] = dict(metrics_data=metrics)
+        db.commit()
+        
+        return metrics
+    except Exception as e:
+        print(f"Error collecting GCP metrics: {e}")
+        return {}
+
+async def collect_k8s_metrics(instance, provider):
+    """Collect Kubernetes metrics via metrics server"""
+    try:
+        if provider.credentials_path:
+            config.load_kube_config(config_file=provider.credentials_path)
+        else:
+            config.load_incluster_config()
+        
+        v1 = client.CoreV1Api()
+        namespace = provider.configuration.get('namespace', 'default')
+        
+        pods = v1.list_namespaced_pod(
+            namespace=namespace,
+            label_selector=f"app={instance.cloud_instance_id}"
+        )
+        
+        metrics = {}
+        
+        if pods.items:
+            pod = pods.items[0]
+            
+            try:
+                custom_api = client.CustomObjectsApi()
+                pod_metrics = custom_api.get_namespaced_custom_object(
+                    group="metrics.k8s.io",
+                    version="v1beta1",
+                    namespace=namespace,
+                    plural="pods",
+                    name=pod.metadata.name
+                )
+                
+                if 'containers' in pod_metrics and pod_metrics['containers']:
+                    container_metrics = pod_metrics['containers'][0]
+                    
+                    if 'usage' in container_metrics:
+                        cpu_usage = container_metrics['usage'].get('cpu', '0')
+                        memory_usage = container_metrics['usage'].get('memory', '0')
+                        
+                        cpu_millicores = int(cpu_usage.replace('n', '')) / 1000000 if 'n' in cpu_usage else int(cpu_usage.replace('m', ''))
+                        memory_bytes = int(memory_usage.replace('Ki', '')) * 1024 if 'Ki' in memory_usage else int(memory_usage)
+                        
+                        metrics['cpu'] = (cpu_millicores / 1000) * 100
+                        metrics['memory'] = (memory_bytes / (1024*1024*1024)) * 100
+                
+            except Exception as e:
+                print(f"Could not get pod metrics: {e}")
+        
+        db.cloud_database_instance[instance.id] = dict(metrics_data=metrics)
+        db.commit()
+        
+        return metrics
+    except Exception as e:
+        print(f"Error collecting K8s metrics: {e}")
+        return {}
+
+async def trigger_threshold_scaling(policy, instance, action):
+    """Trigger scaling based on threshold breach"""
+    try:
+        current_class = instance.instance_class
+        
+        if action == 'scale_up':
+            new_class = get_next_instance_class(current_class, 'up')
+        else:
+            new_class = get_next_instance_class(current_class, 'down')
+        
+        if new_class == current_class:
+            return False
+        
+        event_id = db.scaling_event.insert(
+            cloud_instance_id=instance.id,
+            trigger_type='threshold',
+            action=action,
+            old_instance_class=current_class,
+            new_instance_class=new_class,
+            trigger_metric=policy.metric_type,
+            trigger_value=instance.metrics_data.get(policy.metric_type, 0) if instance.metrics_data else 0,
+            status='pending'
+        )
+        
+        success = await execute_scaling_action(instance.id, new_class)
+        
+        db.scaling_event[event_id] = dict(
+            status='completed' if success else 'failed',
+            completed_at=datetime.utcnow()
+        )
+        db.commit()
+        
+        return success
+    except Exception as e:
+        print(f"Error triggering threshold scaling: {e}")
+        return False
+
+def get_next_instance_class(current_class, direction):
+    """Get the next instance class for scaling up or down"""
+    aws_classes = ['db.t3.micro', 'db.t3.small', 'db.t3.medium', 'db.t3.large', 'db.t3.xlarge', 'db.t3.2xlarge']
+    gcp_classes = ['db-f1-micro', 'db-g1-small', 'db-n1-standard-1', 'db-n1-standard-2', 'db-n1-standard-4', 'db-n1-standard-8']
+    k8s_classes = ['small', 'medium', 'large', 'xlarge', '2xlarge']
+    
+    for class_list in [aws_classes, gcp_classes, k8s_classes]:
+        if current_class in class_list:
+            current_index = class_list.index(current_class)
+            
+            if direction == 'up' and current_index < len(class_list) - 1:
+                return class_list[current_index + 1]
+            elif direction == 'down' and current_index > 0:
+                return class_list[current_index - 1]
+    
+    return current_class
+
 def sync_threat_intel_to_redis():
     """Sync threat intelligence indicators to Redis for proxy consumption"""
     try:
@@ -2769,6 +4249,7 @@ if __name__ == "__main__":
     asyncio.create_task(init_aio_redis())
     asyncio.create_task(periodic_sync())
     asyncio.create_task(periodic_license_validation())
+    asyncio.create_task(periodic_scaling_check())
     
     from py4web import start
     start(host='0.0.0.0', port=8000)

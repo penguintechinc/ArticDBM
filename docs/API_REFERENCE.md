@@ -8,6 +8,9 @@ This document provides comprehensive documentation for all ArticDBM API endpoint
 - [Server Management](#server-management)
 - [User & Permission Management](#user--permission-management)
 - [Database Management](#database-management)
+- [Cloud Provider Management](#cloud-provider-management) ⭐ NEW in v1.1.0
+- [Cloud Database Instances](#cloud-database-instances) ⭐ NEW in v1.1.0
+- [Auto-Scaling Policies](#auto-scaling-policies) ⭐ NEW in v1.1.0
 - [SQL File Management](#sql-file-management)
 - [Security & Blocking](#security--blocking)
 - [Monitoring & Statistics](#monitoring--statistics)
@@ -311,6 +314,202 @@ Authorization: Bearer <token>
   ]
 }
 ```
+
+## ☁️ Cloud Provider Management
+
+### List Cloud Providers
+```http
+GET /api/cloud-providers
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "providers": [
+    {
+      "id": 1,
+      "name": "production-k8s",
+      "provider_type": "kubernetes",
+      "is_active": true,
+      "test_status": "success",
+      "created_at": "2025-01-15T10:00:00Z",
+      "last_tested": "2025-01-15T10:05:00Z"
+    }
+  ]
+}
+```
+
+### Create Cloud Provider
+```http
+POST /api/cloud-providers
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "production-aws",
+  "provider_type": "aws",
+  "configuration": {
+    "region": "us-east-1",
+    "vpc_id": "vpc-12345",
+    "subnet_group_name": "articdbm-subnet-group",
+    "security_group_ids": ["sg-12345", "sg-67890"]
+  },
+  "credentials_path": "/secure/aws-credentials.json",
+  "is_active": true
+}
+```
+
+**Supported Provider Types:**
+- `kubernetes` - Kubernetes cluster integration
+- `aws` - Amazon Web Services (RDS, ElastiCache)
+- `gcp` - Google Cloud Platform (Cloud SQL, Spanner)
+
+### Test Cloud Provider Connection
+```http
+POST /api/cloud-providers/1/test
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "test_result": "success"
+}
+```
+
+## 🖥️ Cloud Database Instances
+
+### List Cloud Instances
+```http
+GET /api/cloud-instances
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "instances": [
+    {
+      "id": 1,
+      "name": "production-mysql",
+      "provider_name": "production-aws",
+      "instance_type": "mysql",
+      "instance_class": "db.t3.medium",
+      "status": "available",
+      "endpoint": "articdbm-production-mysql.c1234.us-east-1.rds.amazonaws.com",
+      "port": 3306,
+      "created_at": "2025-01-15T10:15:00Z"
+    }
+  ]
+}
+```
+
+### Create Cloud Database Instance
+```http
+POST /api/cloud-instances
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "app-postgres",
+  "provider_id": 1,
+  "instance_type": "postgresql",
+  "instance_class": "db.t3.medium",
+  "storage_size": 100,
+  "engine_version": "15.4",
+  "multi_az": true,
+  "backup_retention": 7,
+  "monitoring_enabled": true,
+  "auto_scaling_enabled": true,
+  "auto_scaling_config": {
+    "min_capacity": 1,
+    "max_capacity": 10,
+    "target_cpu": 70
+  }
+}
+```
+
+**Instance Types:**
+- `mysql` - MySQL database
+- `postgresql` - PostgreSQL database
+- `mssql` - Microsoft SQL Server
+- `mongodb` - MongoDB (where supported)
+- `redis` - Redis cache
+
+### Scale Cloud Instance
+```http
+POST /api/cloud-instances/1/scale
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "action": "scale_up",
+  "instance_class": "db.t3.large",
+  "ai_enabled": true
+}
+```
+
+**Actions:**
+- `scale_up` - Increase instance capacity
+- `scale_down` - Decrease instance capacity
+
+## 📊 Auto-Scaling Policies
+
+### List Scaling Policies
+```http
+GET /api/scaling-policies
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "policies": [
+    {
+      "id": 1,
+      "instance_name": "production-mysql",
+      "metric_type": "cpu",
+      "scale_up_threshold": 80.0,
+      "scale_down_threshold": 20.0,
+      "ai_enabled": true,
+      "ai_model": "openai",
+      "is_active": true
+    }
+  ]
+}
+```
+
+### Create Scaling Policy
+```http
+POST /api/scaling-policies
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "cloud_instance_id": 1,
+  "metric_type": "cpu",
+  "scale_up_threshold": 80.0,
+  "scale_down_threshold": 20.0,
+  "scale_up_adjustment": 1,
+  "scale_down_adjustment": -1,
+  "cooldown_period": 300,
+  "ai_enabled": true,
+  "ai_model": "openai",
+  "is_active": true
+}
+```
+
+**Metric Types:**
+- `cpu` - CPU utilization percentage
+- `memory` - Memory utilization percentage
+- `connections` - Active database connections
+- `iops` - Input/output operations per second
+
+**AI Models:**
+- `openai` - OpenAI GPT-4 for scaling recommendations
+- `anthropic` - Anthropic Claude for optimization
+- `ollama` - Local Ollama for on-premise AI
 
 ## 📄 SQL File Management
 
