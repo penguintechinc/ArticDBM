@@ -12,8 +12,8 @@
 /cloudflare https://docs.articdbm.penguintech.io/CLOUDFLARE-SETUP/ 301
 
 # GitHub and download shortcuts
-/github https://github.com/articdbm/articdbm 301
-/download https://github.com/articdbm/articdbm/archive/refs/heads/main.zip 301
+/github https://github.com/penguintechinc/articdbm 301
+/download https://github.com/penguintechinc/articdbm/archive/refs/heads/main.zip 301
 
 # SPA fallback (if needed in future)
 # /* /index.html 200

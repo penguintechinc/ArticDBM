@@ -7,11 +7,14 @@ ArticDBM is a high-performance, security-focused database proxy that sits betwee
 ## 🎯 Key Features
 
 - **Multi-Database Support**: MySQL, PostgreSQL, MSSQL, MongoDB, Redis
-- **Advanced Security**: SQL injection detection, TLS encryption, audit logging
-- **High Performance**: Connection pooling, read/write splitting, intelligent caching
-- **User Management**: Web-based administration with granular permissions
+- **Advanced Security**: SQL injection detection, threat intelligence integration, TLS encryption
+- **Enterprise Authentication**: API keys, temporary access, IP whitelisting, rate limiting
+- **Threat Intelligence**: STIX/TAXII feeds, OpenIOC support, MISP integration
+- **High Performance**: Optimized connection pooling, read/write splitting, warmup
+- **User Management**: Enhanced web-based administration with granular permissions
+- **MSP Ready**: Multi-tenant support, usage-based billing, white-label capabilities
 - **Cloud Native**: Docker containers, Kubernetes deployments, horizontal scaling
-- **Monitoring**: Prometheus metrics, health checks, real-time dashboards
+- **Monitoring**: Prometheus metrics, comprehensive audit logging, usage tracking
 
 ## 🚀 Quick Start
 
@@ -19,7 +22,7 @@ Get ArticDBM running in minutes with Docker Compose:
 
 ```bash
 # Clone the repository
-git clone https://github.com/articdbm/articdbm.git
+git clone https://github.com/penguintechinc/articdbm.git
 cd articdbm
 
 # Start all services
@@ -33,6 +36,9 @@ open http://localhost:8000
 
 - **[Usage Guide](USAGE.md)** - Complete installation and configuration guide
 - **[Architecture](ARCHITECTURE.md)** - System design and component overview
+- **[User Management](USER-MANAGEMENT.md)** - Enhanced authentication, API keys, and security controls
+- **[Threat Intelligence](THREAT-INTELLIGENCE.md)** - STIX/TAXII feeds, MISP integration, and threat blocking
+- **[API Reference](API_REFERENCE.md)** - Complete REST API documentation
 - **[Kubernetes Deployment](KUBERNETES.md)** - Production deployment guide
 - **[Cloudflare Setup](CLOUDFLARE-SETUP.md)** - Web hosting and CDN configuration
 
@@ -54,13 +60,15 @@ ArticDBM consists of two main components:
 
 ## 🔒 Security First
 
-ArticDBM is built with security as a top priority:
+ArticDBM is built with enterprise-grade security as a top priority:
 
-- **SQL Injection Protection** - Pattern-based detection and blocking
-- **Authentication & Authorization** - Granular user permissions
-- **Audit Logging** - Complete query and access logging
-- **TLS Encryption** - End-to-end encrypted connections
-- **Network Security** - Firewall integration and IP whitelisting
+- **Advanced SQL Injection Protection** - 40+ attack patterns with real-time threat prevention
+- **Threat Intelligence Integration** - STIX/TAXII feeds, OpenIOC support, MISP integration
+- **Multi-Factor Authentication** - API keys, temporary tokens, username/password combinations
+- **Enhanced Access Control** - IP whitelisting, TLS enforcement, rate limiting, account expiration
+- **Comprehensive Audit Logging** - Complete query and access logging with security event tracking
+- **Per-User Security Policies** - Granular permissions with time limits and usage quotas
+- **Network Security** - Advanced firewall integration and CIDR-based access control
 
 ## 📊 Performance
 

@@ -1,10 +1,10 @@
 site_name: ArticDBM Documentation
-site_url: https://docs.articdbm.penguintech.io
+site_url: https://docs.articdbm.com
 site_author: ArticDBM Team
 site_description: High-performance, security-focused database proxy documentation
 
-repo_name: articdbm/articdbm
-repo_url: https://github.com/articdbm/articdbm
+repo_name: penguintechinc/articdbm
+repo_url: https://github.com/penguintechinc/articdbm
 edit_uri: blob/main/docs/
 
 theme:
@@ -77,17 +77,24 @@ nav:
     - Usage Guide: USAGE.md
   - Architecture:
     - System Design: ARCHITECTURE.md
+  - Security & Management:
+    - User Management: USER-MANAGEMENT.md
+    - Threat Intelligence: THREAT-INTELLIGENCE.md
+  - API Reference:
+    - API Documentation: API_REFERENCE.md
+    - ArticDBM API Design: ArticDBM API Design.md
   - Deployment:
     - Kubernetes: KUBERNETES.md
     - Cloudflare Setup: CLOUDFLARE-SETUP.md
   - Community:
     - Contributing: CONTRIBUTING.md
+    - License: LICENSE.md
     - Release Notes: RELEASE-NOTES.md
 
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/articdbm/articdbm
+      link: https://github.com/penguintechinc/articdbm
     - icon: fontawesome/brands/docker
       link: https://hub.docker.com/r/articdbm/proxy
   version:

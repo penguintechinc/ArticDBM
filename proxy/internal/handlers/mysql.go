@@ -5,14 +5,15 @@ import (
 	"database/sql"
 	"fmt"
 	"net"
+	"strconv"
 	"sync"
 	"sync/atomic"
 
-	"github.com/articdbm/proxy/internal/auth"
-	"github.com/articdbm/proxy/internal/config"
-	"github.com/articdbm/proxy/internal/metrics"
-	"github.com/articdbm/proxy/internal/pool"
-	"github.com/articdbm/proxy/internal/security"
+	"github.com/penguintechinc/articdbm/proxy/internal/auth"
+	"github.com/penguintechinc/articdbm/proxy/internal/config"
+	"github.com/penguintechinc/articdbm/proxy/internal/metrics"
+	"github.com/penguintechinc/articdbm/proxy/internal/pool"
+	"github.com/penguintechinc/articdbm/proxy/internal/security"
 	"github.com/go-redis/redis/v8"
 	_ "github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
@@ -30,14 +31,24 @@ type MySQLHandler struct {
 }
 
 func NewMySQLHandler(cfg *config.Config, redis *redis.Client, logger *zap.Logger) *MySQLHandler {
-	return &MySQLHandler{
+	handler := &MySQLHandler{
 		cfg:         cfg,
 		redis:       redis,
 		logger:      logger,
 		pools:       make(map[string]*pool.ConnectionPool),
 		authManager: auth.NewManager(cfg, redis, logger),
-		secChecker:  security.NewSQLChecker(cfg.SQLInjectionDetection),
+		secChecker:  security.NewSQLChecker(cfg.SQLInjectionDetection, redis),
 	}
+	
+	// Seed default blocked resources if enabled
+	if cfg.SeedDefaultBlocked {
+		ctx := context.Background()
+		if err := handler.secChecker.SeedDefaultBlockedResources(ctx); err != nil {
+			logger.Warn("Failed to seed default blocked resources", zap.Error(err))
+		}
+	}
+	
+	return handler
 }
 
 func (h *MySQLHandler) Start(ctx context.Context, listener net.Listener) {
@@ -196,7 +207,8 @@ func (h *MySQLHandler) selectBackend(isWrite bool) *config.Backend {
 }
 
 func (h *MySQLHandler) getBackendConnection(backend *config.Backend) (*sql.Conn, error) {
-	key := fmt.Sprintf("%s:%d", backend.Host, backend.Port)
+	// Pre-compute key during initialization to avoid string formatting in hot path
+	key := backend.Host + ":" + strconv.Itoa(backend.Port)
 	
 	h.poolMu.RLock()
 	p, ok := h.pools[key]
@@ -227,12 +239,45 @@ func (h *MySQLHandler) proxyTraffic(ctx context.Context, client net.Conn, backen
 				}
 
 				query := string(buf[:n])
-				if h.secChecker.IsSQLInjection(query) {
-					h.logger.Warn("SQL injection detected",
+				
+				// Check for blocked databases/users/tables if blocking is enabled
+				if h.cfg.BlockingEnabled {
+					if blocked, reason := h.secChecker.IsBlockedConnection(ctx, database, "", username); blocked {
+						h.logger.Warn("Blocked resource access attempt",
+							zap.String("user", username),
+							zap.String("database", database),
+							zap.String("reason", reason),
+							zap.String("type", "connection"))
+						h.sendError(client, "Access to this resource is blocked: "+reason)
+						return
+					}
+				}
+				
+				// Enhanced security check with details
+				if isMalicious, attackType, description := h.secChecker.IsSQLInjectionWithDetails(query); isMalicious {
+					h.logger.Warn("Security threat detected",
 						zap.String("user", username),
-						zap.String("query", query))
+						zap.String("database", database),
+						zap.String("attack_type", attackType),
+						zap.String("description", description),
+						zap.String("query", query[:min(100, len(query))]))
 					metrics.IncSQLInjection("mysql")
-					h.sendError(client, "Query blocked by security policy")
+					h.sendError(client, "Query blocked by security policy: "+attackType)
+					return
+				}
+
+				// Check threat intelligence indicators
+				sourceIP := client.RemoteAddr().String()
+				if matched, indicator, reason := h.secChecker.CheckThreatIntel(ctx, database, sourceIP, query, username); matched {
+					h.logger.Warn("Threat intelligence match",
+						zap.String("user", username),
+						zap.String("database", database),
+						zap.String("source_ip", sourceIP),
+						zap.String("threat_level", indicator.ThreatLevel),
+						zap.String("reason", reason),
+						zap.String("query", query[:min(100, len(query))]))
+					metrics.IncSQLInjection("mysql") // Use same metric for now
+					h.sendError(client, "Query blocked by threat intelligence: "+reason)
 					return
 				}
 
@@ -259,3 +304,4 @@ func (h *MySQLHandler) proxyTraffic(ctx context.Context, client net.Conn, backen
 func (h *MySQLHandler) isWriteQuery(query string) bool {
 	return security.IsWriteQuery(query)
 }
+

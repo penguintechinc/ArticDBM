@@ -105,10 +105,14 @@ type Proxy struct {
 The manager provides configuration and monitoring capabilities.
 
 #### Components
-- **API Server**: RESTful API for configuration
-- **Web UI**: py4web-based management interface
+- **API Server**: RESTful API for configuration and database management
+- **Web UI**: py4web-based management interface with database CRUD operations
 - **Config Sync**: Redis-based configuration distribution
 - **Audit Logger**: Query and access logging
+- **Database Manager**: Lifecycle management for databases
+- **SQL File Processor**: Secure upload, validation, and execution of SQL files
+- **Security Validator**: Comprehensive SQL content security analysis
+- **Blocking Engine**: Default and custom resource blocking system
 
 #### Data Models
 
@@ -134,6 +138,53 @@ class Backend:
     type: str  # 'read' or 'write'
     weight: int
     tls_enabled: bool
+
+# Managed Database Model
+class ManagedDatabase:
+    name: str
+    server_id: int
+    database_name: str
+    description: str
+    schema_version: str
+    auto_backup: bool
+    backup_schedule: str
+    active: bool
+    
+# SQL File Model
+class SQLFile:
+    name: str
+    database_id: int
+    file_type: str  # 'init', 'backup', 'migration', 'patch'
+    file_path: str
+    file_size: int
+    checksum: str
+    syntax_validated: bool
+    security_validated: bool
+    validation_errors: str
+    executed: bool
+    executed_at: datetime
+    executed_by: int
+
+# Blocked Resource Model
+class BlockedDatabase:
+    name: str
+    type: str  # 'database', 'username', 'table'
+    pattern: str
+    reason: str
+    active: bool
+
+# Database Schema Model
+class DatabaseSchema:
+    database_id: int
+    table_name: str
+    column_name: str
+    data_type: str
+    is_nullable: bool
+    default_value: str
+    is_primary_key: bool
+    is_foreign_key: bool
+    foreign_table: str
+    foreign_column: str
 ```
 
 ## 🔄 Data Flow
@@ -234,16 +285,133 @@ func SelectBackend(backends []Backend) *Backend {
 4. **Query Analysis**: SQL injection pattern detection
 5. **Audit Logging**: Complete query audit trail
 
-### SQL Injection Detection
+### Enhanced Security Detection System
+
+ArticDBM implements a comprehensive, multi-layered security detection system with 40+ attack patterns:
+
+#### SQL Injection Detection
 
 ```go
+type SecurityChecker struct {
+    patterns []*regexp.Regexp
+    redis    *redis.Client
+    enabled  bool
+}
+
+// Core SQL injection patterns
 patterns := []string{
-    `(?i)(\bunion\b.*\bselect\b)`,
-    `(?i)(;\s*drop\s+)`,
-    `(?i)(\bor\b\s*\d+\s*=\s*\d+)`,
+    // Classic injection patterns
+    `(?i)(\bunion\b.*\bselect\b|\bselect\b.*\bunion\b)`,
+    `(?i)(;\s*drop\s+|;\s*delete\s+|;\s*truncate\s+|;\s*alter\s+)`,
+    `(?i)(\bor\b\s*\d+\s*=\s*\d+|\band\b\s*\d+\s*=\s*\d+)`,
     `(?i)(--|\#|\/\*|\*\/)`,
+    
+    // Advanced injection techniques
+    `(?i)(\bexec\s*\(|\bexecute\s*\()`,
+    `(?i)(\bwaitfor\s+delay\b|\bsleep\s*\()`,
+    `(?i)(\bbenchmark\s*\(|\bpg_sleep\s*\()`,
+    `(?i)(\bupdatexml\s*\(|\bextractvalue\s*\()`,
+    `(?i)(\bconcat\s*\(.*\bchar\s*\(|\bchar\s*\(.*\bconcat\s*\()`,
+    
+    // System introspection
+    `(?i)(\binformation_schema\b|\bsys\.tables\b|\bsyscolumns\b)`,
+    `(?i)(\bload_file\s*\(|\binto\s+outfile\b|\binto\s+dumpfile\b)`,
+    
+    // Hex encoding and obfuscation
+    `(?i)(0x[0-9a-f]+|\bhex\s*\(|\bunhex\s*\()`,
 }
 ```
+
+#### Shell Command Attack Protection
+
+```go
+// Shell command detection patterns
+shellPatterns := []string{
+    // Direct command execution
+    `(?i)(\bsystem\s*\(|\bshell_exec\s*\(|\bpassthru\s*\()`,
+    `(?i)(\bproc_open\s*\(|\bpopen\s*\()`,
+    `(?i)(\bcmd\b|\bpowershell\b|\bbash\b|\bsh\b)`,
+    
+    // File system operations
+    `(?i)(/bin/|/usr/bin/|/sbin/|/usr/sbin/)`,
+    `(?i)(\bchmod\b|\bchown\b|\bsu\b|\bsudo\b)`,
+    `(?i)(\bmkdir\b|\brmdir\b|\brm\b\s+-rf)`,
+    `(?i)(\bcp\b\s+/|\bmv\b\s+/|\btar\b\s+-)`,
+    
+    // Process and network operations
+    `(?i)(\bkill\b|\bkillall\b|\bps\b|\btop\b)`,
+    `(?i)(\bwget\b|\bcurl\b|\bnc\b|\bnetcat\b)`,
+    `(?i)(\bcat\b\s+/|\btail\b\s+/|\bhead\b\s+/)`,
+    
+    // Command chaining and evaluation
+    `(?i)(\b\|\s*sh\b|\b\|\s*bash\b|\b&&\s*sh\b)`,
+    `(?i)(\$\(.*\)|`+"`"+`.*`+"`"+`|\beval\b)`,
+    
+    // Database-specific system calls
+    `(?i)(\bxp_cmdshell\b|\bcmd\.exe\b)`,
+    `(?i)(\bsp_oacreate\b|\bsp_oamethod\b|\bsp_oadestroy\b)`,
+    `(?i)(\bopenrowset\b|\bopendatasource\b|\blinkedserver\b)`,
+}
+```
+
+#### Default Resource Blocking System
+
+```go
+type BlockedDatabase struct {
+    Name    string `json:"name"`
+    Type    string `json:"type"`    // database, username, table
+    Pattern string `json:"pattern"`
+    Reason  string `json:"reason"`
+    Active  bool   `json:"active"`
+}
+
+func GetDefaultBlockedResources() DefaultBlockedResources {
+    return DefaultBlockedResources{
+        Databases: []BlockedDatabase{
+            // System databases by platform
+            {Name: "master", Type: "database", Pattern: "^master$", Reason: "SQL Server system database"},
+            {Name: "mysql", Type: "database", Pattern: "^mysql$", Reason: "MySQL system database"},
+            {Name: "postgres", Type: "database", Pattern: "^postgres$", Reason: "PostgreSQL default database"},
+            {Name: "admin", Type: "database", Pattern: "^admin$", Reason: "MongoDB admin database"},
+            
+            // Test/demo databases
+            {Name: "test_pattern", Type: "database", Pattern: "^test_.*", Reason: "Test database pattern"},
+            {Name: "demo_pattern", Type: "database", Pattern: "^demo_.*", Reason: "Demo database pattern"},
+        },
+        Users: []BlockedDatabase{
+            // Default administrative accounts
+            {Name: "sa", Type: "username", Pattern: "^sa$", Reason: "SQL Server default admin account"},
+            {Name: "root", Type: "username", Pattern: "^root$", Reason: "Default root account"},
+            {Name: "admin_pattern", Type: "username", Pattern: ".*admin.*", Reason: "Admin user pattern"},
+        },
+    }
+}
+```
+
+#### Security Rule Categories
+
+**Critical (System-Level Threats):**
+- Shell command execution attempts
+- System file access operations
+- Registry manipulation (Windows)
+- Service control operations
+
+**High (SQL Injection & Destructive):**
+- Union-based injection
+- Stacked queries with destructive operations
+- Error-based injection techniques
+- Time-based blind injection
+
+**Medium (Suspicious Patterns):**
+- Default resource access attempts
+- Information schema introspection
+- Excessive quote usage
+- Always-true conditions
+
+**Low (Policy Violations):**
+- Minor syntax anomalies
+- Non-ASCII character usage
+- Overly long query strings
 
 ## 🌐 Deployment Patterns
 

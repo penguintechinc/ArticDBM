@@ -8,7 +8,7 @@ This guide covers installation, configuration, and usage of ArticDBM.
 
 ```bash
 # Clone repository
-git clone https://github.com/articdbm/articdbm.git
+git clone https://github.com/penguintechinc/articdbm.git
 cd articdbm
 
 # Start services
@@ -106,6 +106,110 @@ Permissions control database and table access:
   - `write`: INSERT, UPDATE, DELETE
   - `*`: All operations
 
+## 🗃️ Database Management
+
+ArticDBM now provides comprehensive database lifecycle management capabilities through its enhanced manager interface.
+
+### Managing Databases
+
+#### Adding Managed Databases
+
+Via Manager UI:
+1. Navigate to **Databases** → **Add Database**
+2. Configure database details:
+   - Name and description
+   - Associated server
+   - Database name on server
+   - Auto-backup settings
+   - Backup schedule
+
+Via API:
+```bash
+curl -X POST http://localhost:8000/api/databases \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "production_app",
+    "server_id": 1,
+    "database_name": "prod_db",
+    "description": "Main production database",
+    "auto_backup": true,
+    "backup_schedule": "0 2 * * *"
+  }'
+```
+
+#### Database Operations
+
+- **Create**: Add new databases to management
+- **Update**: Modify database configurations and settings
+- **Delete**: Remove databases from management (soft delete)
+- **Schema Management**: Track and version database schemas
+- **Backup Configuration**: Automated backup scheduling
+
+### SQL File Management
+
+ArticDBM provides secure SQL file upload and execution capabilities with comprehensive security validation.
+
+#### Uploading SQL Files
+
+Via Manager UI:
+1. Navigate to **Databases** → Select Database → **SQL Files**
+2. Upload SQL file with metadata:
+   - File type: `init`, `backup`, `migration`, `patch`
+   - Security validation occurs automatically
+   - Syntax checking performed
+
+Via API:
+```bash
+curl -X POST http://localhost:8000/api/sql-files \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "user_table_migration.sql",
+    "database_id": 1,
+    "file_type": "migration",
+    "file_content": "CREATE TABLE users (id INT PRIMARY KEY, email VARCHAR(255));"
+  }'
+```
+
+#### SQL File Security Validation
+
+Every SQL file undergoes comprehensive security analysis:
+
+**Dangerous Pattern Detection:**
+- SQL injection patterns
+- System command execution attempts
+- File system access operations
+- Database introspection queries
+- Destructive operations
+
+**Shell Command Protection:**
+- Command shell references (`cmd`, `powershell`, `bash`)
+- System function calls
+- File system operations
+- Process execution attempts
+
+**Default Resource Protection:**
+- Access to system databases
+- Use of default administrative accounts
+- Test/demo database operations
+
+#### SQL File Execution
+
+```bash
+# Execute validated SQL file
+curl -X POST http://localhost:8000/api/sql-files/1/execute \
+  -H "Content-Type: application/json"
+
+# Re-validate existing file
+curl -X POST http://localhost:8000/api/sql-files/1/validate \
+  -H "Content-Type: application/json"
+```
+
+**Execution Requirements:**
+- File must pass security validation
+- Database must be active and accessible
+- User must have appropriate permissions
+- File cannot have been previously executed
+
 ## 🗄️ Database Backend Configuration
 
 ### Adding Database Servers
@@ -149,13 +253,95 @@ backends:
 
 ## 🔒 Security Configuration
 
-### SQL Injection Detection
+ArticDBM provides multiple layers of security protection to safeguard your databases against various attack vectors.
 
-Enable pattern-based detection:
+### Enhanced SQL Injection Detection
+
+Enable comprehensive pattern-based detection:
 
 ```bash
 SQL_INJECTION_DETECTION=true
 ```
+
+ArticDBM detects **40+ attack patterns** including:
+- Classic SQL injection (`OR 1=1`, `UNION SELECT`)
+- Blind SQL injection techniques
+- Time-based injection (`WAITFOR DELAY`, `SLEEP`)
+- Error-based injection (`UPDATEXML`, `EXTRACTVALUE`)
+- Stacked queries and batch operations
+- System information disclosure attempts
+
+### Shell Command Attack Protection
+
+ArticDBM provides advanced protection against shell command injection and system-level attacks:
+
+**Protected Command Categories:**
+- **System Commands**: `cmd`, `powershell`, `bash`, `sh`
+- **File System Operations**: `chmod`, `chown`, `mkdir`, `rm -rf`
+- **Process Management**: `kill`, `killall`, `ps`, `top`
+- **Network Operations**: `wget`, `curl`, `nc`, `netcat`
+- **Text Processing**: `awk`, `sed`, `grep`, `find`
+- **System Administration**: `su`, `sudo`, `wmic`, `reg`
+
+**Detection Examples:**
+```bash
+# These queries would be blocked
+SELECT * FROM users WHERE id = 1; DROP TABLE users; --
+SELECT * FROM products WHERE name = 'test'; xp_cmdshell 'dir'
+INSERT INTO logs VALUES ('data', system('cat /etc/passwd'))
+```
+
+### Default Database/Account Blocking
+
+ArticDBM automatically blocks access to common default and test resources:
+
+**Blocked System Databases:**
+- SQL Server: `master`, `msdb`, `tempdb`, `model`
+- MySQL: `mysql`, `sys`, `information_schema`, `performance_schema`
+- PostgreSQL: `postgres`, `template0`, `template1`
+- MongoDB: `admin`, `local`, `config`
+- Common test DBs: `test`, `sample`, `demo`, `example`
+
+**Blocked Default Accounts:**
+- Administrative: `sa`, `root`, `admin`, `administrator`
+- Service accounts: `mysql`, `postgres`, `oracle`, `sqlserver`
+- Test accounts: `test`, `demo`, `sample`, `user`, `guest`
+- Anonymous: empty usernames, `anonymous`
+
+#### Managing Blocked Resources
+
+Via Manager UI:
+1. Navigate to **Security** → **Blocked Resources**
+2. View current blocking rules
+3. Add custom patterns
+4. Enable/disable specific rules
+
+Via API:
+```bash
+# Add custom blocked database pattern
+curl -X POST http://localhost:8000/api/blocked-databases \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "legacy_db_pattern",
+    "type": "database",
+    "pattern": "^legacy_.*",
+    "reason": "Block all legacy databases",
+    "active": true
+  }'
+
+# Block specific username pattern
+curl -X POST http://localhost:8000/api/blocked-databases \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "temp_user_pattern",
+    "type": "username",
+    "pattern": "^temp_.*",
+    "reason": "Block temporary user accounts",
+    "active": true
+  }'
+```
+
+### Custom Security Rules
 
 Add custom security rules via the manager:
 
@@ -167,6 +353,17 @@ Add custom security rules via the manager:
   "severity": "critical"
 }
 ```
+
+**Security Rule Actions:**
+- `block`: Immediately reject the query
+- `alert`: Allow but generate security alert
+- `log`: Allow but log for audit
+
+**Severity Levels:**
+- `critical`: System-level threats, shell commands
+- `high`: SQL injection, destructive operations
+- `medium`: Suspicious patterns, default resource access
+- `low`: Minor policy violations
 
 ### TLS Configuration
 

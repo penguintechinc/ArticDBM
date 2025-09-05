@@ -4,13 +4,16 @@ This document provides context and information for Claude Code when working with
 
 ## 📋 Project Overview
 
-**ArticDBM (Arctic Database Manager)** is a comprehensive database proxy solution that provides:
+**ArticDBM (Arctic Database Manager)** is a comprehensive enterprise-grade database proxy solution that provides:
 
 - **Multi-database support**: MySQL, PostgreSQL, MSSQL, MongoDB, Redis
-- **Security**: SQL injection detection, authentication, authorization  
-- **Performance**: Connection pooling, read/write splitting, load balancing
-- **Monitoring**: Prometheus metrics, audit logging
+- **Advanced Security**: SQL injection detection, threat intelligence integration, authentication, authorization  
+- **Performance**: Optimized connection pooling, read/write splitting, load balancing, warmup
+- **Enterprise Auth**: API keys, temporary access tokens, IP whitelisting, rate limiting, TLS enforcement
+- **Threat Intelligence**: STIX/TAXII feeds, OpenIOC support, MISP integration, real-time blocking
+- **Monitoring**: Prometheus metrics, comprehensive audit logging, usage tracking
 - **High availability**: Cluster mode with shared configuration
+- **MSP Ready**: Multi-tenant support, usage-based billing, white-label capabilities
 
 ## 🏗️ Project Structure
 
@@ -32,10 +35,13 @@ ArticDBM/
 │   ├── requirements.txt    # Python dependencies
 │   └── Dockerfile          # Manager container
 ├── docs/                   # Documentation
-│   ├── README.md          # Main documentation
-│   ├── usage.md           # Usage guide
-│   ├── architecture.md    # Architecture details
-│   ├── release-notes.md   # Release notes
+│   ├── index.md           # Documentation homepage (lowercase exception)
+│   ├── USAGE.md           # Usage guide  
+│   ├── ARCHITECTURE.md    # Architecture details
+│   ├── THREAT-INTELLIGENCE.md  # Threat intelligence guide
+│   ├── USER-MANAGEMENT.md # Enhanced user management
+│   ├── API_REFERENCE.md   # API documentation
+│   ├── RELEASE-NOTES.md   # Release notes
 │   └── ...
 ├── website/               # Website for Cloudflare Pages
 ├── docker-compose.yml     # Development environment
@@ -47,7 +53,7 @@ ArticDBM/
 ## 🔧 Technology Stack
 
 ### Proxy (Go)
-- **Language**: Go 1.21+
+- **Language**: Go 1.23.x (latest patch version)
 - **Database Drivers**: 
   - MySQL: `github.com/go-sql-driver/mysql`
   - PostgreSQL: `github.com/lib/pq`
@@ -94,22 +100,42 @@ go test ./...
 - **No comments** unless explicitly requested
 - **Security-first**: Always validate inputs, use prepared statements
 
-## 🔒 Security Considerations
+### Documentation Naming Convention
+- **All docs**: Use UPPERCASE.md pattern (e.g., `USER-MANAGEMENT.md`, `THREAT-INTELLIGENCE.md`)
+- **Exception**: `index.md` remains lowercase as the documentation homepage
+- **Consistency**: This pattern applies to all `.md` files in `/docs/` directory
+
+## 🔒 Enhanced Security Features
 
 ### SQL Injection Detection
 - Pattern-based detection in `proxy/internal/security/checker.go`
-- 14+ common SQL injection patterns
+- 40+ attack patterns including SQL injection, shell commands, and default resource blocking
+- Real-time threat prevention with detailed analysis
 - Configurable security rules via manager
 
-### Authentication/Authorization
-- User credentials stored in PostgreSQL
-- Permissions cached in Redis for performance
-- Fine-grained access control (database/table level)
+### Threat Intelligence Integration
+- **STIX/TAXII Feeds**: Industry-standard threat intelligence formats
+- **OpenIOC Support**: XML-based indicators of compromise
+- **MISP Integration**: Real-time threat intelligence platform integration
+- **Per-Database Security Policies**: Configurable threat response per database
+- **Advanced Threat Detection**: Pattern matching with confidence scoring
+- **Threat Intelligence Bypass Rules**: Custom override capabilities
 
-### Network Security
-- TLS support for client and backend connections
-- Configurable via environment variables
-- Certificate management
+### Enhanced Authentication/Authorization
+- **Multi-Factor Authentication**: Username/password + API keys + temporary tokens
+- **API Key Management**: 32-byte cryptographically secure tokens for programmatic access
+- **Temporary Access**: One-time tokens with automatic expiration and usage limits
+- **Per-User Security Controls**: TLS enforcement, IP whitelisting, rate limiting
+- **Account Expiration**: Time-limited access with automatic cleanup
+- **Permission Granularity**: Database, table, and action-level permissions with time limits
+- **Usage Tracking**: Query counts, connection monitoring, security event logging
+
+### Advanced Access Control
+- **IP Whitelisting**: CIDR and individual IP access control
+- **TLS Per-User**: Force encrypted connections for sensitive accounts
+- **Rate Limiting**: Configurable requests per second per user
+- **Time-Limited Permissions**: Automatic permission expiration
+- **Query Quotas**: Maximum queries per hour per database
 
 ## 📊 Monitoring & Metrics
 
@@ -174,6 +200,46 @@ Key variables in `proxy/internal/config/config.go`:
 - Load testing with `mysqlslap`, `pgbench`
 - Connection pool testing
 - Latency measurements
+
+## ⚡ Performance Optimizations
+
+### Enhanced Connection Pooling
+- **Optimized Pool Settings**: 80% idle connections (vs 50%) for faster reuse
+- **Connection Warmup**: Pre-establishes 30% of max connections on startup
+- **Smart Lifecycle Management**: 3-minute connection lifetime, 60-second idle timeout
+- **Context-Aware Timeouts**: 5-second connection timeout prevents hanging
+
+### Load Balancing & Routing
+- **Atomic Round-Robin**: Thread-safe backend selection with minimal overhead
+- **Read/Write Splitting**: Automatic query routing based on operation type
+- **Backend Health Monitoring**: Automatic failover with health checks
+- **Connection Locality**: CPU-optimized connection distribution
+
+### Hot Path Optimizations
+- **String Optimization**: Replaced `fmt.Sprintf` with direct concatenation
+- **Buffer Pool Reuse**: Recycled buffers for reduced GC pressure
+- **Cache Efficiency**: Redis-based auth caching with 5-minute TTL
+- **Reduced Allocations**: Minimized memory allocations in critical paths
+
+## 🏢 MSP & Enterprise Capabilities
+
+### Multi-Tenant Architecture
+- **Customer Isolation**: Separate API keys, rate limits, and database permissions per tenant
+- **Usage-Based Billing**: Query quotas and rate limits for tiered pricing models
+- **White-Label Support**: Remove ArticDBM branding, embed in customer applications
+- **Compliance Ready**: IP restrictions, TLS enforcement, audit trails for regulated industries
+
+### Revenue Opportunities
+- **Database-as-a-Service**: Offer secure managed databases at $50-200/month per customer
+- **High Margins**: 70%+ profit margins with automated security and management
+- **Premium Features**: Threat intelligence, advanced security, priority support
+- **Scalable Business Model**: Multi-tenant SaaS with recurring revenue potential
+
+### Operational Efficiency
+- **Automated Provisioning**: API-driven user and database creation
+- **Temporary Access**: One-time tokens for contractors and audits
+- **Security Automation**: Threat intelligence feeds with automatic blocking
+- **Usage Monitoring**: Comprehensive tracking for billing and compliance
 
 ## 🚀 Deployment Patterns
 

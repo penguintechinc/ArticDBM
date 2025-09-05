@@ -173,7 +173,7 @@ document.addEventListener('DOMContentLoaded', function() {
     Thanks for checking out the console! 
     
     If you're interested in contributing to ArticDBM,
-    check out our GitHub: https://github.com/articdbm/articdbm
+    check out our GitHub: https://github.com/penguintechinc/articdbm
     
     Stay cool! ❄️
     `);
