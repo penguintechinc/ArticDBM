@@ -1,4 +1,4 @@
-module github.com/articdbm/proxy
+module github.com/penguintechinc/articdbm/proxy
 
 go 1.21
 

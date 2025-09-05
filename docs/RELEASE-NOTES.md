@@ -231,7 +231,7 @@ Special thanks to all contributors who helped make this release possible.
 ### 📮 Support
 
 For issues and feature requests, please visit:
-- GitHub Issues: https://github.com/articdbm/articdbm/issues
+- GitHub Issues: https://github.com/penguintechinc/articdbm/issues
 - Documentation: https://articdbm.penguintech.io/docs
 
 ---

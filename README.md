@@ -1,4 +1,4 @@
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/articdbm/articdbm) [![version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://semver.org) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0) [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://hub.docker.com/r/articdbm/proxy)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/penguintechinc/articdbm) [![version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://semver.org) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0) [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://hub.docker.com/r/articdbm/proxy)
 
 ```
 :::'###::::'########::'########:'####::'######:::::'########::'########::'##::::'##:
@@ -48,7 +48,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/articdbm/articdbm.git
+git clone https://github.com/penguintechinc/articdbm.git
 cd articdbm
 
 # Start all services
@@ -249,7 +249,7 @@ spec:
 
 ## 🔗 Links
 
-- [GitHub Repository](https://github.com/articdbm/articdbm)
+- [GitHub Repository](https://github.com/penguintechinc/articdbm)
 - [Docker Hub](https://hub.docker.com/r/articdbm/proxy)
 - [Website](https://articdbm.penguintech.io)
 
@@ -258,7 +258,7 @@ spec:
 - Check our [Usage Guide](docs/USAGE.md) for detailed instructions
 - Review [Architecture Guide](docs/ARCHITECTURE.md) for system design details
 - Browse full documentation at [docs.articdbm.penguintech.io](https://docs.articdbm.penguintech.io)
-- Submit issues on [GitHub](https://github.com/articdbm/articdbm/issues)
+- Submit issues on [GitHub](https://github.com/penguintechinc/articdbm/issues)
 
 ## 💻 Example Usage
 
@@ -321,8 +321,8 @@ We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.
 
 - **Documentation**: [docs.articdbm.penguintech.io](https://docs.articdbm.penguintech.io)
 - **Website**: [articdbm.penguintech.io](https://articdbm.penguintech.io)
-- **Issues**: [GitHub Issues](https://github.com/articdbm/articdbm/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/articdbm/articdbm/discussions)
+- **Issues**: [GitHub Issues](https://github.com/penguintechinc/articdbm/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/penguintechinc/articdbm/discussions)
 
 ## ⚖️ License
 

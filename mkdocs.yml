@@ -3,8 +3,8 @@ site_url: https://docs.articdbm.com
 site_author: ArticDBM Team
 site_description: High-performance, security-focused database proxy documentation
 
-repo_name: articdbm/articdbm
-repo_url: https://github.com/articdbm/articdbm
+repo_name: penguintechinc/articdbm
+repo_url: https://github.com/penguintechinc/articdbm
 edit_uri: blob/main/docs/
 
 theme:
@@ -94,7 +94,7 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/articdbm/articdbm
+      link: https://github.com/penguintechinc/articdbm
     - icon: fontawesome/brands/docker
       link: https://hub.docker.com/r/articdbm/proxy
   version:

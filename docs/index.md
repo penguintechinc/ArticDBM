@@ -22,7 +22,7 @@ Get ArticDBM running in minutes with Docker Compose:
 
 ```bash
 # Clone the repository
-git clone https://github.com/articdbm/articdbm.git
+git clone https://github.com/penguintechinc/articdbm.git
 cd articdbm
 
 # Start all services

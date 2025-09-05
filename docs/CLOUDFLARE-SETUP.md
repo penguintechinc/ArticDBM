@@ -78,9 +78,9 @@ The website includes `_headers` file with security configurations:
 The `_redirects` file handles common redirects:
 
 ```
-/docs/* https://github.com/articdbm/articdbm/blob/main/docs/:splat 301
-/github https://github.com/articdbm/articdbm 301
-/download https://github.com/articdbm/articdbm/archive/refs/heads/main.zip 301
+/docs/* https://github.com/penguintechinc/articdbm/blob/main/docs/:splat 301
+/github https://github.com/penguintechinc/articdbm 301
+/download https://github.com/penguintechinc/articdbm/archive/refs/heads/main.zip 301
 ```
 
 ## 📚 Documentation Site (docs.articdbm.penguintech.io)

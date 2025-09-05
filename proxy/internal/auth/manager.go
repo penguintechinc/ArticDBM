@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/articdbm/proxy/internal/config"
+	"github.com/penguintechinc/articdbm/proxy/internal/config"
 	"github.com/go-redis/redis/v8"
 	"go.uber.org/zap"
 )

@@ -314,7 +314,7 @@ import (
     "fmt"
     "net"
     
-    "github.com/articdbm/proxy/internal/config"
+    "github.com/penguintechinc/articdbm/proxy/internal/config"
 )
 
 // Handler interface defines the contract for protocol handlers.

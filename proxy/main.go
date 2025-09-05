@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/articdbm/proxy/internal/config"
-	"github.com/articdbm/proxy/internal/handlers"
-	"github.com/articdbm/proxy/internal/metrics"
+	"github.com/penguintechinc/articdbm/proxy/internal/config"
+	"github.com/penguintechinc/articdbm/proxy/internal/handlers"
+	"github.com/penguintechinc/articdbm/proxy/internal/metrics"
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"

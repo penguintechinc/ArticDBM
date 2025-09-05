@@ -8,7 +8,7 @@ This guide covers installation, configuration, and usage of ArticDBM.
 
 ```bash
 # Clone repository
-git clone https://github.com/articdbm/articdbm.git
+git clone https://github.com/penguintechinc/articdbm.git
 cd articdbm
 
 # Start services
