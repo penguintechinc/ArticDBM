@@ -1587,7 +1587,7 @@ body {
 }
 
 .pricing-faq h3 {
-    color: white;
+    color: var(--deep-blue);
     text-align: center;
     font-size: 2rem;
     margin-bottom: 2rem;
