@@ -760,7 +760,7 @@ body {
 
 /* Footer */
 .footer {
-    background: var(--deep-blue);
+    background: #0f172a;
     color: white;
     padding: 4rem 2rem 2rem;
 }
@@ -1983,7 +1983,7 @@ body {
 
 /* Footer */
 .footer {
-    background: var(--darker-blue);
+    background: #0f172a;
     padding: 3rem 1rem 1rem 1rem;
 }
 
