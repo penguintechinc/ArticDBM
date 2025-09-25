@@ -13,6 +13,12 @@ import (
 	"github.com/penguintechinc/articdbm/proxy/internal/config"
 	"github.com/penguintechinc/articdbm/proxy/internal/handlers"
 	"github.com/penguintechinc/articdbm/proxy/internal/metrics"
+	"github.com/penguintechinc/articdbm/proxy/internal/numa"
+	"github.com/penguintechinc/articdbm/proxy/internal/xdp"
+	"github.com/penguintechinc/articdbm/proxy/internal/afxdp"
+	"github.com/penguintechinc/articdbm/proxy/internal/cache"
+	"github.com/penguintechinc/articdbm/proxy/internal/multiwrite"
+	"github.com/penguintechinc/articdbm/proxy/internal/bluegreen"
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -23,6 +29,11 @@ import (
 var (
 	logger *zap.Logger
 	cfg    *config.Config
+	xdpController *xdp.Controller
+	afxdpManager *afxdp.SocketManager
+	cacheManager *cache.MultiTierCache
+	multiwriteManager *multiwrite.Manager
+	deploymentManager *bluegreen.DeploymentManager
 )
 
 func init() {
@@ -37,12 +48,22 @@ func main() {
 	defer logger.Sync()
 
 	cfg = config.LoadConfig()
-	logger.Info("Starting ArticDBM Proxy", 
+	logger.Info("Starting ArticDBM Proxy with XDP acceleration",
 		zap.String("version", cfg.Version),
 		zap.Int("port", cfg.ProxyPort))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Initialize NUMA topology and optimize memory allocation
+	topology, err := numa.DiscoverTopology()
+	if err != nil {
+		logger.Warn("Failed to discover NUMA topology, continuing without optimization", zap.Error(err))
+	} else {
+		logger.Info("NUMA topology discovered",
+			zap.Int("numa_nodes", len(topology.Nodes)),
+			zap.Int("total_cpus", topology.TotalCPUs))
+	}
 
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     cfg.RedisAddr,
@@ -54,6 +75,36 @@ func main() {
 		logger.Error("Failed to connect to Redis", zap.Error(err))
 		os.Exit(1)
 	}
+
+	// Initialize XDP controller
+	xdpController, err = xdp.NewController(cfg.XDPInterface, logger)
+	if err != nil {
+		logger.Warn("Failed to initialize XDP controller, continuing without XDP acceleration", zap.Error(err))
+	} else {
+		logger.Info("XDP controller initialized")
+		defer xdpController.Close()
+	}
+
+	// Initialize AF_XDP socket manager
+	afxdpManager, err = afxdp.NewSocketManager(cfg.XDPInterface, topology, logger)
+	if err != nil {
+		logger.Warn("Failed to initialize AF_XDP socket manager", zap.Error(err))
+	} else {
+		logger.Info("AF_XDP socket manager initialized")
+		defer afxdpManager.Close()
+	}
+
+	// Initialize multi-tier cache
+	cacheManager = cache.NewMultiTierCache(redisClient, xdpController, cfg, logger)
+	logger.Info("Multi-tier cache system initialized")
+
+	// Initialize multi-write manager
+	multiwriteManager = multiwrite.NewManager(redisClient, logger)
+	logger.Info("Multi-write manager initialized")
+
+	// Initialize blue/green deployment manager
+	deploymentManager = bluegreen.NewDeploymentManager(redisClient, xdpController, logger)
+	logger.Info("Blue/green deployment manager initialized")
 
 	metrics.InitMetrics()
 
@@ -107,6 +158,14 @@ func main() {
 
 	go startConfigSync(ctx, redisClient, cfg)
 
+	// Start XDP rule synchronization
+	if xdpController != nil {
+		go startXDPRuleSync(ctx, redisClient, xdpController)
+	}
+
+	// Start deployment monitoring
+	go startDeploymentMonitoring(ctx, redisClient, deploymentManager)
+
 	go startMetricsServer(cfg.MetricsPort)
 
 	sigChan := make(chan os.Signal, 1)
@@ -115,6 +174,14 @@ func main() {
 
 	logger.Info("Shutting down ArticDBM Proxy")
 	cancel()
+
+	// Graceful shutdown of XDP resources
+	if xdpController != nil {
+		xdpController.Close()
+	}
+	if afxdpManager != nil {
+		afxdpManager.Close()
+	}
 
 	for name, listener := range proxies {
 		logger.Info("Closing listener", zap.String("proxy", name))
@@ -134,7 +201,7 @@ func startMySQLProxy(ctx context.Context, cfg *config.Config, redis *redis.Clien
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		handler := handlers.NewMySQLHandler(cfg, redis, logger)
+		handler := handlers.NewMySQLHandler(cfg, redis, logger, xdpController, cacheManager, multiwriteManager)
 		handler.Start(ctx, listener)
 	}()
 
@@ -151,7 +218,7 @@ func startPostgreSQLProxy(ctx context.Context, cfg *config.Config, redis *redis.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		handler := handlers.NewPostgreSQLHandler(cfg, redis, logger)
+		handler := handlers.NewPostgreSQLHandler(cfg, redis, logger, xdpController, cacheManager, multiwriteManager)
 		handler.Start(ctx, listener)
 	}()
 
@@ -168,7 +235,7 @@ func startMSSQLProxy(ctx context.Context, cfg *config.Config, redis *redis.Clien
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		handler := handlers.NewMSSQLHandler(cfg, redis, logger)
+		handler := handlers.NewMSSQLHandler(cfg, redis, logger, xdpController, cacheManager, multiwriteManager)
 		handler.Start(ctx, listener)
 	}()
 
@@ -185,7 +252,7 @@ func startMongoDBProxy(ctx context.Context, cfg *config.Config, redis *redis.Cli
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		handler := handlers.NewMongoDBHandler(cfg, redis, logger)
+		handler := handlers.NewMongoDBHandler(cfg, redis, logger, xdpController, cacheManager, multiwriteManager)
 		handler.Start(ctx, listener)
 	}()
 
@@ -202,7 +269,7 @@ func startRedisProxy(ctx context.Context, cfg *config.Config, redis *redis.Clien
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		handler := handlers.NewRedisProxyHandler(cfg, redis, logger)
+		handler := handlers.NewRedisProxyHandler(cfg, redis, logger, xdpController, cacheManager, multiwriteManager)
 		handler.Start(ctx, listener)
 	}()
 
@@ -225,6 +292,42 @@ func startConfigSync(ctx context.Context, redisClient *redis.Client, cfg *config
 				logger.Debug("Config refreshed from Redis")
 			}
 			ticker.Reset(time.Duration(45+time.Now().Unix()%30) * time.Second)
+		}
+	}
+}
+
+func startXDPRuleSync(ctx context.Context, redisClient *redis.Client, controller *xdp.Controller) {
+	pubsub := redisClient.Subscribe(ctx, "articdbm:xdp:rule_update")
+	defer pubsub.Close()
+
+	ch := pubsub.Channel()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-ch:
+			if err := controller.ProcessRuleUpdate(msg.Payload); err != nil {
+				logger.Error("Failed to process XDP rule update", zap.Error(err))
+			}
+		}
+	}
+}
+
+func startDeploymentMonitoring(ctx context.Context, redisClient *redis.Client, manager *bluegreen.DeploymentManager) {
+	pubsub := redisClient.Subscribe(ctx, "articdbm:deployment:update", "articdbm:deployment:rollback")
+	defer pubsub.Close()
+
+	ch := pubsub.Channel()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-ch:
+			if err := manager.ProcessDeploymentEvent(msg.Channel, msg.Payload); err != nil {
+				logger.Error("Failed to process deployment event", zap.Error(err))
+			}
 		}
 	}
 }

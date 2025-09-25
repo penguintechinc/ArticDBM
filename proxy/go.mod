@@ -3,6 +3,7 @@ module github.com/penguintechinc/articdbm/proxy
 go 1.21
 
 require (
+	github.com/cilium/ebpf v0.12.3
 	github.com/denisenkom/go-mssqldb v0.12.3
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-redis/redismock/v8 v8.11.5
@@ -12,7 +13,9 @@ require (
 	github.com/prometheus/client_golang v1.18.0
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.8.4
+	github.com/vishvananda/netlink v1.1.0
 	go.uber.org/zap v1.26.0
+	golang.org/x/sys v0.15.0
 )
 
 require (
