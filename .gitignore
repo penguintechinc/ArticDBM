@@ -73,6 +73,10 @@ id_rsa*
 .claude/
 .idea/
 
+# Project planning and tracking files
+.PLAN
+.TODO
+
 # Build outputs
 site/
 dist/

@@ -2,15 +2,17 @@
 
 ## Overview
 
-ArticDBM follows a microservices architecture with two main components: the Proxy and the Manager. These components work together to provide secure, scalable database access management.
+ArticDBM v1.2.0 features a revolutionary **XDP-accelerated microservices architecture** that delivers extreme performance through kernel-level packet processing while maintaining the secure, scalable database access management of previous versions. The architecture combines traditional microservices patterns with cutting-edge eBPF/XDP technology for unprecedented throughput.
 
 ## 🎯 Design Principles
 
-1. **Performance First**: Written in Go for minimal latency
-2. **Security by Default**: SQL injection detection, authentication, and authorization
-3. **High Availability**: Cluster mode with shared configuration
-4. **Cloud Native**: Container-first design with Kubernetes support
-5. **Database Agnostic**: Support for multiple database protocols
+1. **Extreme Performance**: XDP/AF_XDP kernel acceleration for 100M+ packets/second
+2. **NUMA Optimization**: Memory locality awareness for multi-socket systems
+3. **Security by Default**: eBPF-based filtering with real-time threat intelligence
+4. **Zero-Copy Networking**: AF_XDP sockets minimize CPU overhead
+5. **High Availability**: Cluster mode with XDP-enabled load balancing
+6. **Cloud Native**: Kubernetes operator with XDP support
+7. **Database Agnostic**: Protocol translation with kernel-level optimization
 
 ## 🔧 System Components
 

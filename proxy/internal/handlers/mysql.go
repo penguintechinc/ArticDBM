@@ -14,15 +14,16 @@ import (
 	"github.com/penguintechinc/articdbm/proxy/internal/metrics"
 	"github.com/penguintechinc/articdbm/proxy/internal/pool"
 	"github.com/penguintechinc/articdbm/proxy/internal/security"
+	"github.com/penguintechinc/articdbm/proxy/internal/cache"
+	"github.com/penguintechinc/articdbm/proxy/internal/multiwrite"
+	"github.com/penguintechinc/articdbm/proxy/internal/xdp"
 	"github.com/go-redis/redis/v8"
 	_ "github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 )
 
 type MySQLHandler struct {
-	cfg          *config.Config
-	redis        *redis.Client
-	logger       *zap.Logger
+	*BaseHandler
 	pools        map[string]*pool.ConnectionPool
 	poolMu       sync.RWMutex
 	roundRobin   uint64
@@ -30,11 +31,11 @@ type MySQLHandler struct {
 	secChecker   *security.SQLChecker
 }
 
-func NewMySQLHandler(cfg *config.Config, redis *redis.Client, logger *zap.Logger) *MySQLHandler {
+func NewMySQLHandler(cfg *config.Config, redis *redis.Client, logger *zap.Logger,
+	xdpController *xdp.Controller, cacheManager *cache.MultiTierCache,
+	multiwriteManager *multiwrite.Manager) *MySQLHandler {
 	handler := &MySQLHandler{
-		cfg:         cfg,
-		redis:       redis,
-		logger:      logger,
+		BaseHandler: NewBaseHandler(cfg, redis, logger, xdpController, cacheManager, multiwriteManager),
 		pools:       make(map[string]*pool.ConnectionPool),
 		authManager: auth.NewManager(cfg, redis, logger),
 		secChecker:  security.NewSQLChecker(cfg.SQLInjectionDetection, redis),

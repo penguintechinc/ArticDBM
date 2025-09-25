@@ -61,6 +61,16 @@ type Config struct {
 	ClusterMode      bool
 	ClusterRedisAddr string
 
+	// XDP/AF_XDP Configuration
+	XDPEnabled         bool
+	XDPInterface       string
+	XDPRateLimitPPS    uint64
+	XDPBurstLimit      uint32
+	AFXDPEnabled       bool
+	AFXDPBatchSize     int
+	XDPCacheSize       uint32
+	XDPCacheTTL        uint32
+
 	Users        map[string]*User
 	Permissions  map[string]*Permission
 }
@@ -139,6 +149,17 @@ func LoadConfig() *Config {
 		
 		ClusterMode:           getEnvAsBool("CLUSTER_MODE", false),
 		ClusterRedisAddr:      getEnv("CLUSTER_REDIS_ADDR", ""),
+
+		// XDP/AF_XDP Configuration
+		XDPEnabled:         getEnvAsBool("XDP_ENABLED", true),
+		XDPInterface:       getEnv("XDP_INTERFACE", "eth0"),
+		XDPRateLimitPPS:    uint64(getEnvAsInt("XDP_RATE_LIMIT_PPS", 100000000)),
+		XDPBurstLimit:      uint32(getEnvAsInt("XDP_BURST_LIMIT", 10000)),
+		AFXDPEnabled:       getEnvAsBool("AFXDP_ENABLED", true),
+		AFXDPBatchSize:     getEnvAsInt("AFXDP_BATCH_SIZE", 64),
+		XDPCacheSize:       uint32(getEnvAsInt("XDP_CACHE_SIZE", 1048576)),
+		XDPCacheTTL:        uint32(getEnvAsInt("XDP_CACHE_TTL", 300)),
+
 		Users:                 make(map[string]*User),
 		Permissions:           make(map[string]*Permission),
 	}

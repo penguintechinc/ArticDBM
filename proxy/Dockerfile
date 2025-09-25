@@ -1,6 +1,6 @@
 FROM golang:1.21-alpine AS builder
 
-RUN apk add --no-cache git ca-certificates
+RUN apk add --no-cache git ca-certificates clang llvm make linux-headers libbpf-dev
 
 WORKDIR /app
 
@@ -9,11 +9,12 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o articdbm-proxy .
+RUN make build-xdp
+RUN CGO_ENABLED=1 GOOS=linux go build -a -o articdbm-proxy .
 
 FROM alpine:3.19
 
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates libbpf
 
 WORKDIR /root/
 
@@ -37,7 +38,15 @@ ENV PROXY_PORT=8080 \
     CONNECTION_TIMEOUT=30 \
     QUERY_TIMEOUT=60 \
     TLS_ENABLED=false \
-    CLUSTER_MODE=false
+    CLUSTER_MODE=false \
+    XDP_ENABLED=true \
+    XDP_INTERFACE=eth0 \
+    XDP_RATE_LIMIT_PPS=100000000 \
+    XDP_BURST_LIMIT=10000 \
+    AFXDP_ENABLED=true \
+    AFXDP_BATCH_SIZE=64 \
+    XDP_CACHE_SIZE=1048576 \
+    XDP_CACHE_TTL=300
 
 EXPOSE 3306 5432 1433 27017 6379 8080 9090
 
