@@ -156,6 +156,15 @@ func main() {
 		}
 	}
 
+	if cfg.SQLiteEnabled {
+		listener, err := startSQLiteProxy(ctx, cfg, redisClient, &wg)
+		if err != nil {
+			logger.Error("Failed to start SQLite proxy", zap.Error(err))
+		} else {
+			proxies["sqlite"] = listener
+		}
+	}
+
 	go startConfigSync(ctx, redisClient, cfg)
 
 	// Start XDP rule synchronization
@@ -274,6 +283,23 @@ func startRedisProxy(ctx context.Context, cfg *config.Config, redis *redis.Clien
 	}()
 
 	logger.Info("Redis proxy started", zap.Int("port", cfg.RedisProxyPort))
+	return listener, nil
+}
+
+func startSQLiteProxy(ctx context.Context, cfg *config.Config, redis *redis.Client, wg *sync.WaitGroup) (net.Listener, error) {
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.SQLitePort))
+	if err != nil {
+		return nil, err
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		handler := handlers.NewSQLiteHandler(cfg, redis, logger, xdpController, cacheManager, multiwriteManager)
+		handler.Start(ctx, listener)
+	}()
+
+	logger.Info("SQLite proxy started", zap.Int("port", cfg.SQLitePort))
 	return listener, nil
 }
 

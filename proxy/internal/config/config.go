@@ -45,6 +45,10 @@ type Config struct {
 	RedisProxyPort    int
 	RedisBackends     []Backend
 
+	SQLiteEnabled bool
+	SQLitePort    int
+	SQLiteConfigs []SQLiteConfig
+
 	MetricsPort int
 
 	SQLInjectionDetection bool
@@ -60,6 +64,9 @@ type Config struct {
 
 	ClusterMode      bool
 	ClusterRedisAddr string
+
+	// Galera cluster settings
+	GaleraConfig       map[string]interface{}
 
 	// XDP/AF_XDP Configuration
 	XDPEnabled         bool
@@ -84,6 +91,20 @@ type Backend struct {
 	User     string
 	Password string
 	Database string
+	IsGalera bool   // whether this is a Galera cluster node
+}
+
+type SQLiteConfig struct {
+	Path           string `json:"path"`
+	Name           string `json:"name"`
+	ReadOnly       bool   `json:"read_only"`
+	WALMode        bool   `json:"wal_mode"`
+	BusyTimeout    int    `json:"busy_timeout"`
+	CacheSize      int    `json:"cache_size"`
+	JournalMode    string `json:"journal_mode"`
+	Synchronous    string `json:"synchronous"`
+	ForeignKeys    bool   `json:"foreign_keys"`
+	MaxConnections int    `json:"max_connections"`
 }
 
 type User struct {
@@ -347,4 +368,37 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 		return value
 	}
 	return defaultValue
+}
+
+// HasGaleraNodes returns true if any MySQL backends are configured as Galera nodes
+func (c *Config) HasGaleraNodes() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	for _, backend := range c.MySQLBackends {
+		if backend.IsGalera {
+			return true
+		}
+	}
+	return false
+}
+
+// GetGaleraNodes returns all MySQL backends that are Galera cluster nodes
+func (c *Config) GetGaleraNodes() []Backend {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var galeraNodes []Backend
+	for _, backend := range c.MySQLBackends {
+		if backend.IsGalera {
+			galeraNodes = append(galeraNodes, backend)
+		}
+	}
+	return galeraNodes
+}
+
+// GetRandomFloat returns a random float between 0 and 1 for weighted selection
+func (c *Config) GetRandomFloat() float64 {
+	// This is a simple implementation - in production you might want to use crypto/rand
+	return float64(time.Now().UnixNano()%1000000) / 1000000.0
 }

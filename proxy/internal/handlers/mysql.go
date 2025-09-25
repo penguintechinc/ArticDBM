@@ -34,13 +34,39 @@ type MySQLHandler struct {
 func NewMySQLHandler(cfg *config.Config, redis *redis.Client, logger *zap.Logger,
 	xdpController *xdp.Controller, cacheManager *cache.MultiTierCache,
 	multiwriteManager *multiwrite.Manager) *MySQLHandler {
+
+	// Check if any MySQL backends are Galera nodes
+	if cfg.HasGaleraNodes() {
+		logger.Info("Galera cluster nodes detected, initializing Galera-aware MySQL handler")
+
+		// Initialize Galera handler instead
+		galeraHandler := NewGaleraHandler(cfg, redis, logger, xdpController, cacheManager, multiwriteManager)
+
+		// Set cluster names for metrics
+		for _, backend := range cfg.GetGaleraNodes() {
+			key := fmt.Sprintf("%s:%d", backend.Host, backend.Port)
+			metrics.SetGaleraNodeCluster(key, cfg.ClusterNodeID)
+		}
+
+		// Return as MySQLHandler interface (since GaleraHandler embeds MySQLHandler functionality)
+		return &MySQLHandler{
+			BaseHandler: galeraHandler.BaseHandler,
+			pools:       galeraHandler.pools,
+			poolMu:      galeraHandler.poolMu,
+			roundRobin:  0,
+			authManager: galeraHandler.authManager,
+			secChecker:  galeraHandler.secChecker,
+		}
+	}
+
+	// Standard MySQL handler for non-Galera setups
 	handler := &MySQLHandler{
 		BaseHandler: NewBaseHandler(cfg, redis, logger, xdpController, cacheManager, multiwriteManager),
 		pools:       make(map[string]*pool.ConnectionPool),
 		authManager: auth.NewManager(cfg, redis, logger),
 		secChecker:  security.NewSQLChecker(cfg.SQLInjectionDetection, redis),
 	}
-	
+
 	// Seed default blocked resources if enabled
 	if cfg.SeedDefaultBlocked {
 		ctx := context.Background()
@@ -48,7 +74,7 @@ func NewMySQLHandler(cfg *config.Config, redis *redis.Client, logger *zap.Logger
 			logger.Warn("Failed to seed default blocked resources", zap.Error(err))
 		}
 	}
-	
+
 	return handler
 }
 

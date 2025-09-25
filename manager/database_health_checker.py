@@ -39,7 +39,9 @@ class DatabaseHealthChecker:
             'postgresql': PostgreSQLHealthChecker(),
             'redis': RedisHealthChecker(),
             'mongodb': MongoDBHealthChecker(),
-            'mssql': MSSQLHealthChecker()
+            'mssql': MSSQLHealthChecker(),
+            'galera': GaleraHealthChecker(),
+            'sqlite': SQLiteHealthChecker()
         }
         self.eol_versions = self._load_eol_versions()
         self.default_credentials = self._load_default_credentials()
@@ -1480,6 +1482,486 @@ class MSSQLHealthChecker(BaseHealthChecker):
             'issues': [],
             'scan_details': {'note': 'MSSQL health checking requires additional dependencies'}
         }
+
+        return result
+
+class GaleraHealthChecker(BaseHealthChecker):
+    """Health checker specifically for MariaDB Galera Cluster"""
+
+    async def check_server(self, server: Dict[str, Any], parent_checker) -> Dict[str, Any]:
+        """Check Galera cluster health"""
+        result = {
+            'server_name': server.get('name'),
+            'server_type': 'galera',
+            'host': server.get('host', 'localhost'),
+            'port': server.get('port', 3306),
+            'status': 'unknown',
+            'version': None,
+            'galera_info': {},
+            'issues': []
+        }
+
+        try:
+            # Use aiomysql for async connection
+            import aiomysql
+            conn = await aiomysql.connect(
+                host=server['host'],
+                port=server.get('port', 3306),
+                user=server['username'],
+                password=server['password'],
+                db=server.get('database', 'mysql'),
+                autocommit=True
+            )
+
+            async with conn.cursor() as cursor:
+                # Check if this is actually a Galera cluster
+                await cursor.execute("SHOW STATUS LIKE 'wsrep_provider'")
+                wsrep_provider = await cursor.fetchone()
+
+                if not wsrep_provider or wsrep_provider[1] == 'none':
+                    result['status'] = 'not_galera'
+                    result['issues'].append({
+                        'category': 'configuration_issues',
+                        'severity': 'high',
+                        'title': 'Not a Galera Cluster',
+                        'description': 'This MySQL/MariaDB instance is not configured as a Galera cluster',
+                        'recommendation': 'Install galera package and configure wsrep_provider in my.cnf'
+                    })
+                    await conn.ensure_closed()
+                    return result
+
+                result['status'] = 'galera_cluster'
+
+                # Get version information
+                await cursor.execute("SELECT VERSION()")
+                version_result = await cursor.fetchone()
+                if version_result:
+                    result['version'] = version_result[0]
+
+                # Check Galera-specific status variables
+                galera_vars = [
+                    'wsrep_ready',
+                    'wsrep_local_state',
+                    'wsrep_cluster_status',
+                    'wsrep_cluster_size',
+                    'wsrep_flow_control_paused',
+                    'wsrep_cert_deps_distance',
+                    'wsrep_local_cert_failures',
+                    'wsrep_local_bf_aborts',
+                    'wsrep_local_replays',
+                    'wsrep_local_send_queue',
+                    'wsrep_local_recv_queue'
+                ]
+
+                galera_status = {}
+                for var in galera_vars:
+                    await cursor.execute(f"SHOW STATUS LIKE '{var}'")
+                    var_result = await cursor.fetchone()
+                    if var_result:
+                        galera_status[var] = var_result[1]
+
+                result['galera_info'] = galera_status
+
+                # Analyze Galera health
+                issues = []
+
+                # Check wsrep_ready
+                if galera_status.get('wsrep_ready') != 'ON':
+                    issues.append({
+                        'category': 'security_issues',
+                        'severity': 'critical',
+                        'title': 'Galera Node Not Ready',
+                        'description': f"wsrep_ready is {galera_status.get('wsrep_ready')}, node is not ready",
+                        'recommendation': 'Check cluster connectivity and node state'
+                    })
+
+                # Check local state
+                local_state = galera_status.get('wsrep_local_state', '0')
+                state_names = {
+                    '0': 'Undefined', '1': 'Joining', '2': 'Donor/Desynced',
+                    '3': 'Joined', '4': 'Synced', '5': 'Error'
+                }
+                state_name = state_names.get(local_state, 'Unknown')
+
+                if local_state in ['0', '5']:
+                    issues.append({
+                        'category': 'configuration_issues',
+                        'severity': 'critical',
+                        'title': f'Node State: {state_name}',
+                        'description': f'Galera node is in {state_name} state',
+                        'recommendation': 'Check cluster configuration and restart if necessary'
+                    })
+                elif local_state in ['1', '2', '3']:
+                    issues.append({
+                        'category': 'configuration_issues',
+                        'severity': 'medium',
+                        'title': f'Node State: {state_name}',
+                        'description': f'Node is in {state_name} state, not fully synchronized',
+                        'recommendation': 'Wait for node to reach Synced state'
+                    })
+
+                # Check cluster status
+                cluster_status = galera_status.get('wsrep_cluster_status', '')
+                if cluster_status != 'Primary':
+                    issues.append({
+                        'category': 'configuration_issues',
+                        'severity': 'high',
+                        'title': 'Cluster Not Primary',
+                        'description': f'Cluster status is {cluster_status}, not Primary',
+                        'recommendation': 'Check cluster connectivity and resolve split-brain issues'
+                    })
+
+                # Check cluster size
+                cluster_size = int(galera_status.get('wsrep_cluster_size', '0'))
+                if cluster_size == 1:
+                    issues.append({
+                        'category': 'configuration_issues',
+                        'severity': 'medium',
+                        'title': 'Single Node Cluster',
+                        'description': 'Cluster has only one node, no high availability',
+                        'recommendation': 'Add additional nodes to the cluster for redundancy'
+                    })
+                elif cluster_size < 3:
+                    issues.append({
+                        'category': 'configuration_issues',
+                        'severity': 'low',
+                        'title': 'Small Cluster Size',
+                        'description': f'Cluster has only {cluster_size} nodes',
+                        'recommendation': 'Consider at least 3 nodes for production use'
+                    })
+
+                # Check flow control
+                if galera_status.get('wsrep_flow_control_paused', '0') != '0':
+                    issues.append({
+                        'category': 'security_issues',
+                        'severity': 'high',
+                        'title': 'Flow Control Active',
+                        'description': 'Galera flow control is active, indicating performance issues',
+                        'recommendation': 'Check system resources and optimize queries'
+                    })
+
+                # Check certification distance
+                cert_distance = float(galera_status.get('wsrep_cert_deps_distance', '0'))
+                if cert_distance > 100:
+                    issues.append({
+                        'category': 'security_issues',
+                        'severity': 'medium',
+                        'title': 'High Certification Distance',
+                        'description': f'Certification dependency distance is {cert_distance}',
+                        'recommendation': 'Review query patterns to reduce conflicts'
+                    })
+
+                # Check certification failures
+                cert_failures = int(galera_status.get('wsrep_local_cert_failures', '0'))
+                if cert_failures > 0:
+                    issues.append({
+                        'category': 'configuration_issues',
+                        'severity': 'medium',
+                        'title': 'Certification Failures',
+                        'description': f'{cert_failures} certification failures detected',
+                        'recommendation': 'Monitor for transaction conflicts and optimize queries'
+                    })
+
+                # Check queue sizes
+                send_queue = int(galera_status.get('wsrep_local_send_queue', '0'))
+                recv_queue = int(galera_status.get('wsrep_local_recv_queue', '0'))
+
+                if send_queue > 100:
+                    issues.append({
+                        'category': 'security_issues',
+                        'severity': 'medium',
+                        'title': 'High Send Queue',
+                        'description': f'Local send queue is {send_queue}',
+                        'recommendation': 'Check network connectivity and system performance'
+                    })
+
+                if recv_queue > 100:
+                    issues.append({
+                        'category': 'security_issues',
+                        'severity': 'medium',
+                        'title': 'High Receive Queue',
+                        'description': f'Local receive queue is {recv_queue}',
+                        'recommendation': 'Check system performance and query optimization'
+                    })
+
+                # Check configuration variables
+                config_vars = [
+                    ('wsrep_sst_method', ['rsync', 'mariabackup', 'xtrabackup-v2']),
+                    ('innodb_autoinc_lock_mode', ['2']),
+                    ('binlog_format', ['ROW']),
+                    ('wsrep_slave_threads', None)  # Will check if >= 2
+                ]
+
+                for var_name, expected_values in config_vars:
+                    await cursor.execute(f"SHOW VARIABLES LIKE '{var_name}'")
+                    var_result = await cursor.fetchone()
+
+                    if var_result:
+                        current_value = var_result[1]
+
+                        if var_name == 'wsrep_slave_threads':
+                            if int(current_value) < 2:
+                                issues.append({
+                                    'category': 'configuration_issues',
+                                    'severity': 'medium',
+                                    'title': f'Low {var_name}',
+                                    'description': f'{var_name} is {current_value}, recommended minimum is 2',
+                                    'recommendation': f'Set {var_name} = 4 or higher'
+                                })
+                        elif expected_values and current_value not in expected_values:
+                            issues.append({
+                                'category': 'configuration_issues',
+                                'severity': 'high',
+                                'title': f'Incorrect {var_name}',
+                                'description': f'{var_name} is {current_value}, should be one of: {expected_values}',
+                                'recommendation': f'Set {var_name} to appropriate value for Galera'
+                            })
+
+                result['issues'] = issues
+
+            await conn.ensure_closed()
+
+        except Exception as e:
+            logger.exception(f"Galera health check failed for {server.get('name', 'unknown')}")
+            result['status'] = 'error'
+            result['issues'] = [{
+                'category': 'configuration_issues',
+                'severity': 'critical',
+                'title': 'Health Check Failed',
+                'description': f'Failed to check Galera cluster health: {str(e)}',
+                'recommendation': 'Check database connection settings and Galera configuration'
+            }]
+
+        return result
+
+class SQLiteHealthChecker(BaseHealthChecker):
+    """Health checker for SQLite databases"""
+
+    async def check_server(self, server: Dict[str, Any], parent_checker) -> Dict[str, Any]:
+        """Check SQLite database health"""
+        result = {
+            'server_name': server.get('name'),
+            'server_type': 'sqlite',
+            'host': 'local',
+            'port': 0,
+            'status': 'unknown',
+            'version': None,
+            'sqlite_info': {},
+            'issues': []
+        }
+
+        try:
+            import sqlite3
+            import os
+
+            db_path = server.get('path', server.get('host', ':memory:'))
+
+            # Check if file exists (for file-based databases)
+            if db_path != ':memory:':
+                if not os.path.exists(db_path):
+                    result['status'] = 'file_not_found'
+                    result['issues'].append({
+                        'category': 'configuration_issues',
+                        'severity': 'critical',
+                        'title': 'Database File Not Found',
+                        'description': f'SQLite database file does not exist: {db_path}',
+                        'recommendation': 'Create the database file or check the path configuration'
+                    })
+                    return result
+
+                # Check file permissions
+                if not os.access(db_path, os.R_OK):
+                    result['issues'].append({
+                        'category': 'security_issues',
+                        'severity': 'high',
+                        'title': 'Database File Not Readable',
+                        'description': f'Cannot read SQLite database file: {db_path}',
+                        'recommendation': 'Check file permissions and ownership'
+                    })
+
+                if not server.get('read_only', False) and not os.access(db_path, os.W_OK):
+                    result['issues'].append({
+                        'category': 'security_issues',
+                        'severity': 'high',
+                        'title': 'Database File Not Writable',
+                        'description': f'Cannot write to SQLite database file: {db_path}',
+                        'recommendation': 'Check file permissions for write access'
+                    })
+
+            # Connect to database
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+
+            result['status'] = 'connected'
+
+            # Get SQLite version
+            cursor.execute('SELECT sqlite_version()')
+            version = cursor.fetchone()[0]
+            result['version'] = version
+
+            # Get database information
+            sqlite_info = {}
+
+            # PRAGMA checks
+            pragma_checks = [
+                ('journal_mode', 'WAL'),
+                ('synchronous', 'NORMAL'),
+                ('cache_size', -64000),
+                ('foreign_keys', 1),
+                ('page_size', 4096),
+                ('auto_vacuum', 0),
+                ('temp_store', 2),  # MEMORY
+                ('mmap_size', 268435456)  # 256MB
+            ]
+
+            issues = []
+
+            for pragma, recommended in pragma_checks:
+                cursor.execute(f'PRAGMA {pragma}')
+                current_value = cursor.fetchone()[0]
+                sqlite_info[pragma] = current_value
+
+                # Check for suboptimal settings
+                if pragma == 'journal_mode' and current_value not in ['WAL', 'MEMORY']:
+                    issues.append({
+                        'category': 'configuration_issues',
+                        'severity': 'medium',
+                        'title': 'Suboptimal Journal Mode',
+                        'description': f'Journal mode is {current_value}, WAL is recommended for better concurrency',
+                        'recommendation': 'Set PRAGMA journal_mode = WAL for better performance'
+                    })
+                elif pragma == 'synchronous' and current_value == 0:  # OFF
+                    issues.append({
+                        'category': 'security_issues',
+                        'severity': 'medium',
+                        'title': 'Unsafe Synchronous Mode',
+                        'description': 'Synchronous mode is OFF, risking data corruption',
+                        'recommendation': 'Set PRAGMA synchronous = NORMAL or FULL'
+                    })
+                elif pragma == 'foreign_keys' and current_value == 0:
+                    issues.append({
+                        'category': 'configuration_issues',
+                        'severity': 'low',
+                        'title': 'Foreign Keys Disabled',
+                        'description': 'Foreign key constraints are disabled',
+                        'recommendation': 'Enable foreign keys with PRAGMA foreign_keys = ON'
+                    })
+                elif pragma == 'cache_size' and abs(current_value) < 32000:
+                    issues.append({
+                        'category': 'configuration_issues',
+                        'severity': 'medium',
+                        'title': 'Small Cache Size',
+                        'description': f'Cache size is {current_value}, consider increasing for better performance',
+                        'recommendation': 'Set PRAGMA cache_size = -64000 (64MB) or higher'
+                    })
+
+            # Database statistics
+            cursor.execute('PRAGMA page_count')
+            page_count = cursor.fetchone()[0]
+
+            cursor.execute('PRAGMA page_size')
+            page_size = cursor.fetchone()[0]
+
+            database_size = page_count * page_size
+            sqlite_info['page_count'] = page_count
+            sqlite_info['page_size'] = page_size
+            sqlite_info['database_size_bytes'] = database_size
+
+            # Check for large database without optimization
+            if database_size > 100 * 1024 * 1024:  # 100MB
+                if sqlite_info.get('auto_vacuum', 0) == 0:
+                    issues.append({
+                        'category': 'configuration_issues',
+                        'severity': 'low',
+                        'title': 'Large Database Without Auto-Vacuum',
+                        'description': f'Database is {database_size // (1024*1024)}MB but auto-vacuum is disabled',
+                        'recommendation': 'Consider enabling auto-vacuum for large databases'
+                    })
+
+            # Check for schema issues
+            cursor.execute('SELECT name FROM sqlite_master WHERE type="table"')
+            tables = [row[0] for row in cursor.fetchall()]
+            sqlite_info['table_count'] = len(tables)
+
+            # Check for tables without indexes
+            tables_without_indexes = []
+            for table in tables:
+                if table.startswith('sqlite_'):
+                    continue
+                cursor.execute(f'SELECT name FROM sqlite_master WHERE type="index" AND tbl_name="{table}"')
+                indexes = cursor.fetchall()
+                if not indexes:
+                    tables_without_indexes.append(table)
+
+            if tables_without_indexes:
+                issues.append({
+                    'category': 'configuration_issues',
+                    'severity': 'low',
+                    'title': 'Tables Without Indexes',
+                    'description': f'Tables without indexes: {", ".join(tables_without_indexes)}',
+                    'recommendation': 'Consider adding appropriate indexes for query performance'
+                })
+
+            # Integrity check (quick)
+            cursor.execute('PRAGMA quick_check')
+            integrity_result = cursor.fetchone()[0]
+            if integrity_result != 'ok':
+                issues.append({
+                    'category': 'security_issues',
+                    'severity': 'critical',
+                    'title': 'Database Integrity Issues',
+                    'description': f'PRAGMA quick_check failed: {integrity_result}',
+                    'recommendation': 'Run PRAGMA integrity_check and repair the database'
+                })
+
+            # Check for write-ahead log files (if WAL mode)
+            if db_path != ':memory:' and sqlite_info.get('journal_mode') == 'wal':
+                wal_file = db_path + '-wal'
+                shm_file = db_path + '-shm'
+
+                if os.path.exists(wal_file):
+                    wal_size = os.path.getsize(wal_file)
+                    sqlite_info['wal_size_bytes'] = wal_size
+
+                    # Check for large WAL files
+                    if wal_size > 10 * 1024 * 1024:  # 10MB
+                        issues.append({
+                            'category': 'configuration_issues',
+                            'severity': 'medium',
+                            'title': 'Large WAL File',
+                            'description': f'WAL file is {wal_size // (1024*1024)}MB, may need checkpoint',
+                            'recommendation': 'Run PRAGMA wal_checkpoint to reduce WAL file size'
+                        })
+
+            # Version-specific checks
+            version_parts = version.split('.')
+            major_version = int(version_parts[0])
+            minor_version = int(version_parts[1]) if len(version_parts) > 1 else 0
+
+            if major_version < 3 or (major_version == 3 and minor_version < 35):
+                issues.append({
+                    'category': 'version_issues',
+                    'severity': 'medium',
+                    'title': 'Old SQLite Version',
+                    'description': f'SQLite version {version} is outdated',
+                    'recommendation': 'Consider upgrading to SQLite 3.35+ for better features and security'
+                })
+
+            result['sqlite_info'] = sqlite_info
+            result['issues'] = issues
+
+            conn.close()
+
+        except Exception as e:
+            logger.exception(f"SQLite health check failed for {server.get('name', 'unknown')}")
+            result['status'] = 'error'
+            result['issues'] = [{
+                'category': 'configuration_issues',
+                'severity': 'critical',
+                'title': 'Health Check Failed',
+                'description': f'Failed to check SQLite database health: {str(e)}',
+                'recommendation': 'Check database file path and permissions'
+            }]
 
         return result
 

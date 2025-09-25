@@ -195,6 +195,8 @@ services:
       MONGODB_PORT: 27017
       REDIS_PROXY_ENABLED: "true"
       REDIS_PROXY_PORT: 6379
+      SQLITE_ENABLED: "true"
+      SQLITE_PORT: 8765
       SQL_INJECTION_DETECTION: "true"
       MAX_CONNECTIONS: 500
       TLS_ENABLED: "false"
@@ -215,10 +217,12 @@ services:
       - "5432:5432"
       - "27017:27017"
       - "6379:6379"
+      - "8765:8765"
       - "9091:9091"
     volumes:
       - proxy_dev_1_logs:/app/logs
       - proxy_dev_1_data:/app/data
+      - sqlite_dev_data:/data/articdbm
     depends_on:
       - redis-dev
       - mysql-test
@@ -249,6 +253,8 @@ services:
       MONGODB_PORT: 27017
       REDIS_PROXY_ENABLED: "true"
       REDIS_PROXY_PORT: 6379
+      SQLITE_ENABLED: "true"
+      SQLITE_PORT: 8765
       SQL_INJECTION_DETECTION: "true"
       MAX_CONNECTIONS: 500
       TLS_ENABLED: "false"
@@ -269,10 +275,12 @@ services:
       - "5435:5432"
       - "27018:27017"
       - "6381:6379"
+      - "8766:8765"
       - "9092:9092"
     volumes:
       - proxy_dev_2_logs:/app/logs
       - proxy_dev_2_data:/app/data
+      - sqlite_dev_data:/data/articdbm
     depends_on:
       - redis-dev
       - mysql-test
@@ -479,6 +487,8 @@ volumes:
   redis_insight_data:
     driver: local
   pgadmin_dev_data:
+    driver: local
+  sqlite_dev_data:
     driver: local
 
 networks:
