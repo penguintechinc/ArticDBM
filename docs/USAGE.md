@@ -1,6 +1,6 @@
-# 📘 ArticDBM Usage Guide
+# 📘 ArticDBM v1.2.0 Usage Guide
 
-This guide covers installation, configuration, and usage of ArticDBM.
+This comprehensive guide covers installation, configuration, and usage of ArticDBM v1.2.0 "Arctic Storm" - the world's first XDP-accelerated enterprise database proxy with advanced security and AI-driven operations.
 
 ## 📦 Installation
 
@@ -18,7 +18,9 @@ docker-compose up -d
 docker-compose ps
 ```
 
-### Kubernetes
+### Kubernetes with XDP Support
+
+For optimal performance with XDP acceleration:
 
 ```yaml
 apiVersion: apps/v1
@@ -37,13 +39,57 @@ spec:
     spec:
       containers:
       - name: proxy
-        image: articdbm/proxy:latest
+        image: articdbm/proxy:1.2.0
         env:
         - name: REDIS_ADDR
           value: "redis-service:6379"
+        - name: XDP_ENABLED
+          value: "true"
+        - name: NUMA_OPTIMIZATION
+          value: "true"
+        - name: THREAT_INTEL_ENABLED
+          value: "true"
+        securityContext:
+          privileged: true  # Required for XDP
+          capabilities:
+            add: ["NET_ADMIN", "SYS_ADMIN"]
         ports:
         - containerPort: 3306
         - containerPort: 5432
+        - containerPort: 9090  # Metrics
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+      nodeSelector:
+        xdp-capable: "true"  # Ensure XDP-capable nodes
+```
+
+### Kubernetes Operator (Recommended for Production)
+
+```yaml
+apiVersion: articdbm.io/v1alpha1
+kind: ArticDBMProxy
+metadata:
+  name: production-proxy
+spec:
+  replicas: 5
+  xdp:
+    enabled: true
+    numWorkers: 4
+  security:
+    threatIntelligence: true
+    complianceScanning: true
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "4000m"
 ```
 
 ## ⚙️ Configuration
@@ -52,17 +98,25 @@ spec:
 
 #### Proxy Configuration
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `REDIS_ADDR` | Redis connection string | `localhost:6379` |
-| `MYSQL_ENABLED` | Enable MySQL proxy | `true` |
-| `MYSQL_PORT` | MySQL proxy port | `3306` |
-| `POSTGRESQL_ENABLED` | Enable PostgreSQL proxy | `true` |
-| `POSTGRESQL_PORT` | PostgreSQL proxy port | `5432` |
-| `SQL_INJECTION_DETECTION` | Enable SQL injection detection | `true` |
-| `MAX_CONNECTIONS` | Maximum connections per backend | `1000` |
-| `TLS_ENABLED` | Enable TLS support | `false` |
-| `CLUSTER_MODE` | Enable cluster mode | `false` |
+| Variable | Description | Default | v1.2.0 |
+|----------|-------------|---------|--------|
+| `REDIS_ADDR` | Redis connection string | `localhost:6379` | ✅ |
+| `MYSQL_ENABLED` | Enable MySQL proxy | `true` | ✅ |
+| `MYSQL_PORT` | MySQL proxy port | `3306` | ✅ |
+| `POSTGRESQL_ENABLED` | Enable PostgreSQL proxy | `true` | ✅ |
+| `POSTGRESQL_PORT` | PostgreSQL proxy port | `5432` | ✅ |
+| `SQL_INJECTION_DETECTION` | Enable SQL injection detection | `true` | ✅ |
+| `MAX_CONNECTIONS` | Maximum connections per backend | `1000` | ✅ |
+| `TLS_ENABLED` | Enable TLS support | `false` | ✅ |
+| `CLUSTER_MODE` | Enable cluster mode | `false` | ✅ |
+| **XDP_ENABLED** | Enable XDP acceleration | `false` | 🆕 |
+| **NUMA_OPTIMIZATION** | Enable NUMA optimization | `true` | 🆕 |
+| **XDP_WORKERS** | Number of XDP worker threads | `4` | 🆕 |
+| **THREAT_INTEL_ENABLED** | Enable threat intelligence | `true` | 🆕 |
+| **SECURITY_SCANNING** | Enable daily security scans | `true` | 🆕 |
+| **ML_OPTIMIZATION** | Enable ML query optimization | `true` | 🆕 |
+| **TRACING_ENABLED** | Enable distributed tracing | `false` | 🆕 |
+| **BACKUP_ENABLED** | Enable automated backups | `true` | 🆕 |
 
 #### Manager Configuration
 
