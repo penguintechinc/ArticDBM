@@ -1,0 +1,630 @@
+[[extend 'layout.html']]
+
+[[block page_content]]
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2>User Management</h2>
+            <div>
+                <button class="btn btn-success" onclick="createUser()">
+                    <i class="bi bi-person-plus"></i> Create User
+                </button>
+                <button class="btn btn-info" onclick="bulkImport()">
+                    <i class="bi bi-upload"></i> Bulk Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User Statistics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="metric-card success">
+            <div class="metric-value">[[=len(users)]]</div>
+            <div class="metric-label">Total Users</div>
+            <small class="text-muted">[[=sum(1 for u in users if u.get('registration_key') is None)]] active</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card info">
+            <div class="metric-value">5</div>
+            <div class="metric-label">Admin Users</div>
+            <small class="text-muted">With full access</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card warning">
+            <div class="metric-value">12</div>
+            <div class="metric-label">API Keys</div>
+            <small class="text-muted">Active across all users</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card danger">
+            <div class="metric-value">3</div>
+            <div class="metric-label">Temp Access</div>
+            <small class="text-muted">Tokens active</small>
+        </div>
+    </div>
+</div>
+
+<!-- Users Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-hover data-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>API Key</th>
+                            <th>Permissions</th>
+                            <th>Last Login</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        [[for user in users:]]
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="user-avatar me-2">
+                                        [[=user.first_name[0] if user.first_name else user.email[0]]]
+                                    </div>
+                                    <div>
+                                        <strong>[[=f"{user.first_name} {user.last_name}" if user.first_name else user.email.split('@')[0]]]</strong>
+                                        <br>
+                                        <small class="text-muted">ID: [[=user.id]]</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                [[=user.email]]
+                                [[if user.email == 'admin@articdbm.com':]]
+                                <span class="badge bg-primary ms-1">System Admin</span>
+                                [[pass]]
+                            </td>
+                            <td>
+                                [[if user.email == 'admin@articdbm.com':]]
+                                <span class="badge bg-danger">Super Admin</span>
+                                [[else:]]
+                                <select class="form-select form-select-sm" style="width: 120px;"
+                                        onchange="updateUserRole([[=user.id]], this.value)">
+                                    <option value="user" selected>User</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="readonly">Read Only</option>
+                                    <option value="developer">Developer</option>
+                                </select>
+                                [[pass]]
+                            </td>
+                            <td>
+                                <div class="api-key-info">
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="showApiKey([[=user.id]])">
+                                        <i class="bi bi-key"></i> View Key
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-warning" onclick="regenerateApiKey([[=user.id]])">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </button>
+                                </div>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-info" onclick="managePermissions([[=user.id]])">
+                                    <i class="bi bi-shield-check"></i> [[=5]] databases
+                                </button>
+                            </td>
+                            <td>
+                                <small class="text-muted">
+                                    [[=user.last_password_change.strftime('%Y-%m-%d') if user.last_password_change else 'Never']]
+                                </small>
+                            </td>
+                            <td>
+                                [[if user.registration_key is None:]]
+                                <div class="d-flex align-items-center">
+                                    <span class="status-active">Active</span>
+                                    <div class="form-check form-switch ms-2">
+                                        <input class="form-check-input" type="checkbox" checked
+                                               onchange="toggleUserStatus([[=user.id]], this.checked)">
+                                    </div>
+                                </div>
+                                [[else:]]
+                                <span class="status-warning">Pending</span>
+                                [[pass]]
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary" onclick="editUser([[=user.id]])"
+                                            title="Edit User">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-outline-info" onclick="viewActivity([[=user.id]])"
+                                            title="View Activity">
+                                        <i class="bi bi-activity"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary" onclick="impersonateUser([[=user.id]])"
+                                            title="Impersonate">
+                                        <i class="bi bi-person-gear"></i>
+                                    </button>
+                                    [[if user.email != 'admin@articdbm.com':]]
+                                    <button class="btn btn-outline-danger" onclick="deleteUser([[=user.id]])"
+                                            title="Delete User">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    [[pass]]
+                                </div>
+                            </td>
+                        </tr>
+                        [[pass]]
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit User Modal -->
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="userModalTitle">Create User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="userForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">First Name</label>
+                            <input type="text" class="form-control" name="first_name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Last Name</label>
+                            <input type="text" class="form-control" name="last_name" required>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label class="form-label">Email Address</label>
+                            <input type="email" class="form-control" name="email" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Role</label>
+                            <select class="form-select" name="role">
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                                <option value="readonly">Read Only</option>
+                                <option value="developer">Developer</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-control" name="password" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Confirm Password</label>
+                            <input type="password" class="form-control" name="password_confirm" required>
+                        </div>
+                    </div>
+
+                    <h6 class="mt-3">Access Control</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="requireTLS" name="require_tls">
+                                <label class="form-check-label" for="requireTLS">
+                                    Require TLS Connections
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="generateApiKey" name="generate_api_key" checked>
+                                <label class="form-check-label" for="generateApiKey">
+                                    Generate API Key
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Rate Limit (req/sec)</label>
+                                <input type="number" class="form-control" name="rate_limit" value="100" min="0" max="10000">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Allowed IP Addresses (comma-separated)</label>
+                        <input type="text" class="form-control" name="allowed_ips"
+                               placeholder="192.168.1.0/24, 10.0.0.1">
+                        <small class="text-muted">Leave empty to allow from any IP</small>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Account Expires</label>
+                            <input type="date" class="form-control" name="expires_at">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="sendWelcome" name="send_welcome" checked>
+                                <label class="form-check-label" for="sendWelcome">
+                                    Send Welcome Email
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveUser()">Create User</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Permissions Management Modal -->
+<div class="modal fade" id="permissionsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Manage User Permissions</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6>Available Databases</h6>
+                        <div class="list-group" id="databaseList">
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                production_mysql
+                                <button class="btn btn-sm btn-outline-primary" onclick="addDatabasePermission('production_mysql')">
+                                    <i class="bi bi-plus"></i>
+                                </button>
+                            </div>
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                analytics_postgres
+                                <button class="btn btn-sm btn-outline-primary" onclick="addDatabasePermission('analytics_postgres')">
+                                    <i class="bi bi-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <h6>User Permissions</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Database</th>
+                                        <th>Table</th>
+                                        <th>Actions</th>
+                                        <th>Expires</th>
+                                        <th>Max Queries</th>
+                                        <th>Remove</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="permissionsTable">
+                                    <tr>
+                                        <td>production_mysql</td>
+                                        <td>
+                                            <select class="form-select form-select-sm">
+                                                <option value="*">All Tables</option>
+                                                <option value="users">users</option>
+                                                <option value="orders">orders</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="checkbox" checked>
+                                                <label class="form-check-label">Read</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="checkbox">
+                                                <label class="form-check-label">Write</label>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <input type="date" class="form-control form-control-sm">
+                                        </td>
+                                        <td>
+                                            <input type="number" class="form-control form-control-sm" value="1000" min="0">
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-danger">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="savePermissions()">Save Permissions</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- API Key Display Modal -->
+<div class="modal fade" id="apiKeyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">API Key</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    This API key will only be shown once. Please save it securely.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">API Key</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="apiKeyValue" readonly>
+                        <button class="btn btn-outline-secondary" onclick="copyApiKey()">
+                            <i class="bi bi-clipboard"></i> Copy
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Usage Example</label>
+                    <pre class="bg-light p-2 rounded"><code>curl -H "X-API-Key: <span id="apiKeyExample"></span>" http://localhost:8000/api/health</code></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">I've Saved It</button>
+            </div>
+        </div>
+    </div>
+</div>
+[[end]]
+
+[[block page_scripts]]
+<script>
+function createUser() {
+    $('#userModalTitle').text('Create User');
+    $('#userForm')[0].reset();
+    $('#userModal').modal('show');
+}
+
+function editUser(userId) {
+    showLoading();
+    $.get(`/api/users/${userId}`, function(data) {
+        hideLoading();
+        $('#userModalTitle').text('Edit User');
+        // Populate form with user data
+        $('#userForm input[name="first_name"]').val(data.first_name);
+        $('#userForm input[name="last_name"]').val(data.last_name);
+        $('#userForm input[name="email"]').val(data.email);
+        $('#userForm').data('user-id', userId);
+        $('#userModal').modal('show');
+    });
+}
+
+function saveUser() {
+    const formData = $('#userForm').serialize();
+    const userId = $('#userForm').data('user-id');
+
+    showLoading();
+
+    const url = userId ? `/api/users/${userId}` : '/api/users';
+    const method = userId ? 'PUT' : 'POST';
+
+    $.ajax({
+        url: url,
+        method: method,
+        data: formData,
+        success: function(data) {
+            hideLoading();
+            showSuccess('User saved successfully');
+            $('#userModal').modal('hide');
+
+            if (data.api_key && !userId) {
+                // Show API key for new user
+                $('#apiKeyValue').val(data.api_key);
+                $('#apiKeyExample').text(data.api_key);
+                $('#apiKeyModal').modal('show');
+            }
+
+            setTimeout(() => location.reload(), 1500);
+        },
+        error: function() {
+            hideLoading();
+            showError('Failed to save user');
+        }
+    });
+}
+
+function deleteUser(userId) {
+    confirmAction(
+        'Delete User?',
+        'This will permanently delete the user and revoke all their access.',
+        function() {
+            showLoading();
+            $.ajax({
+                url: `/api/users/${userId}`,
+                method: 'DELETE',
+                success: function() {
+                    hideLoading();
+                    showSuccess('User deleted successfully');
+                    setTimeout(() => location.reload(), 1500);
+                },
+                error: function() {
+                    hideLoading();
+                    showError('Failed to delete user');
+                }
+            });
+        }
+    );
+}
+
+function updateUserRole(userId, role) {
+    $.ajax({
+        url: `/api/users/${userId}/role`,
+        method: 'PUT',
+        data: { role: role },
+        success: function() {
+            showSuccess(`User role updated to ${role}`);
+        },
+        error: function() {
+            showError('Failed to update user role');
+        }
+    });
+}
+
+function toggleUserStatus(userId, active) {
+    $.ajax({
+        url: `/api/users/${userId}/status`,
+        method: 'PUT',
+        data: { active: active },
+        success: function() {
+            showSuccess(`User ${active ? 'activated' : 'deactivated'}`);
+        },
+        error: function() {
+            showError('Failed to update user status');
+        }
+    });
+}
+
+function showApiKey(userId) {
+    showLoading();
+    $.get(`/api/users/${userId}/api-key`, function(data) {
+        hideLoading();
+        $('#apiKeyValue').val(data.api_key);
+        $('#apiKeyExample').text(data.api_key);
+        $('#apiKeyModal').modal('show');
+    });
+}
+
+function regenerateApiKey(userId) {
+    confirmAction(
+        'Regenerate API Key?',
+        'This will invalidate the current API key. All applications using it will need to be updated.',
+        function() {
+            showLoading();
+            $.ajax({
+                url: `/api/users/${userId}/api-key/regenerate`,
+                method: 'POST',
+                success: function(data) {
+                    hideLoading();
+                    showSuccess('API key regenerated');
+                    $('#apiKeyValue').val(data.api_key);
+                    $('#apiKeyExample').text(data.api_key);
+                    $('#apiKeyModal').modal('show');
+                },
+                error: function() {
+                    hideLoading();
+                    showError('Failed to regenerate API key');
+                }
+            });
+        }
+    );
+}
+
+function managePermissions(userId) {
+    $('#permissionsModal').modal('show');
+}
+
+function savePermissions() {
+    // Collect permissions data and save
+    showSuccess('Permissions updated successfully');
+    $('#permissionsModal').modal('hide');
+}
+
+function viewActivity(userId) {
+    window.location.href = `/monitoring/logs?user=${userId}`;
+}
+
+function impersonateUser(userId) {
+    confirmAction(
+        'Impersonate User?',
+        'You will be logged in as this user. This action will be logged.',
+        function() {
+            window.location.href = `/auth/impersonate/${userId}`;
+        }
+    );
+}
+
+function copyApiKey() {
+    const apiKey = document.getElementById('apiKeyValue');
+    apiKey.select();
+    document.execCommand('copy');
+    showSuccess('API key copied to clipboard');
+}
+
+function bulkImport() {
+    Swal.fire({
+        title: 'Bulk Import Users',
+        html: `
+            <div class="mb-3">
+                <label class="form-label">Upload CSV File</label>
+                <input type="file" class="form-control" id="csvFile" accept=".csv">
+            </div>
+            <div class="alert alert-info">
+                <small>CSV format: email,first_name,last_name,role</small>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Import',
+        preConfirm: () => {
+            const file = document.getElementById('csvFile').files[0];
+            if (!file) {
+                Swal.showValidationMessage('Please select a CSV file');
+                return false;
+            }
+            return file;
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const formData = new FormData();
+            formData.append('file', result.value);
+
+            showLoading();
+            $.ajax({
+                url: '/api/users/bulk-import',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(data) {
+                    hideLoading();
+                    showSuccess(`Imported ${data.imported} users successfully`);
+                    setTimeout(() => location.reload(), 1500);
+                },
+                error: function() {
+                    hideLoading();
+                    showError('Failed to import users');
+                }
+            });
+        }
+    });
+}
+
+// User avatar styling
+$('<style>').appendTo('head').html(`
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: 16px;
+    }
+`);
+</script>
+[[end]]

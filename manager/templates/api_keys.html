@@ -1,0 +1,685 @@
+[[extend 'layout.html']]
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-key text-warning"></i> API Key Management</h2>
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createApiKeyModal">
+            <i class="fas fa-plus"></i> Generate New API Key
+        </button>
+    </div>
+
+    <!-- API Key Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title mb-0">Total API Keys</h6>
+                            <h4 class="mb-0" id="total-api-keys">0</h4>
+                        </div>
+                        <i class="fas fa-key fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title mb-0">Active Keys</h6>
+                            <h4 class="mb-0" id="active-api-keys">0</h4>
+                        </div>
+                        <i class="fas fa-check-circle fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title mb-0">Expiring Soon</h6>
+                            <h4 class="mb-0" id="expiring-api-keys">0</h4>
+                        </div>
+                        <i class="fas fa-exclamation-triangle fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title mb-0">Last 24h Usage</h6>
+                            <h4 class="mb-0" id="daily-api-usage">0</h4>
+                        </div>
+                        <i class="fas fa-chart-line fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Keys Table -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-list"></i> API Keys</h5>
+            <div class="d-flex gap-2">
+                <input type="text" class="form-control form-control-sm" id="searchApiKeys" placeholder="Search API keys..." style="width: 200px;">
+                <select class="form-select form-select-sm" id="filterStatus" style="width: 150px;">
+                    <option value="">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="expired">Expired</option>
+                    <option value="revoked">Revoked</option>
+                </select>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped" id="apiKeysTable">
+                    <thead>
+                        <tr>
+                            <th>Key Name</th>
+                            <th>Key Preview</th>
+                            <th>Owner</th>
+                            <th>Permissions</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Expires</th>
+                            <th>Last Used</th>
+                            <th>Usage Count</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="apiKeysTableBody">
+                        <!-- API keys will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create API Key Modal -->
+<div class="modal fade" id="createApiKeyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-plus"></i> Generate New API Key</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="createApiKeyForm">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="apiKeyName" class="form-label">Key Name *</label>
+                                <input type="text" class="form-control" id="apiKeyName" required>
+                                <div class="form-text">Descriptive name for this API key</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="apiKeyOwner" class="form-label">Owner *</label>
+                                <select class="form-select" id="apiKeyOwner" required>
+                                    <option value="">Select user...</option>
+                                    <!-- Users will be populated here -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="apiKeyExpiration" class="form-label">Expiration</label>
+                                <select class="form-select" id="apiKeyExpiration">
+                                    <option value="">Never expires</option>
+                                    <option value="30">30 days</option>
+                                    <option value="90">90 days</option>
+                                    <option value="180">6 months</option>
+                                    <option value="365">1 year</option>
+                                    <option value="custom">Custom date</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="apiKeyCustomExpiration" class="form-label">Custom Expiration Date</label>
+                                <input type="datetime-local" class="form-control" id="apiKeyCustomExpiration" disabled>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Permissions</label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="permReadData">
+                                    <label class="form-check-label" for="permReadData">
+                                        Read Data
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="permWriteData">
+                                    <label class="form-check-label" for="permWriteData">
+                                        Write Data
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="permManageUsers">
+                                    <label class="form-check-label" for="permManageUsers">
+                                        Manage Users
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="permManageClusters">
+                                    <label class="form-check-label" for="permManageClusters">
+                                        Manage Clusters
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="permViewMetrics">
+                                    <label class="form-check-label" for="permViewMetrics">
+                                        View Metrics
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="permManageSecurity">
+                                    <label class="form-check-label" for="permManageSecurity">
+                                        Manage Security
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="permSystemAdmin">
+                                    <label class="form-check-label" for="permSystemAdmin">
+                                        System Administration
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="permApiAccess">
+                                    <label class="form-check-label" for="permApiAccess">
+                                        API Access
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="apiKeyRateLimit" class="form-label">Rate Limit (requests/hour)</label>
+                                <input type="number" class="form-control" id="apiKeyRateLimit" value="1000" min="1">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="apiKeyIpWhitelist" class="form-label">IP Whitelist</label>
+                                <input type="text" class="form-control" id="apiKeyIpWhitelist" placeholder="192.168.1.0/24, 10.0.0.1">
+                                <div class="form-text">Comma-separated IPs/CIDRs (optional)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="apiKeyDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="apiKeyDescription" rows="3" placeholder="Purpose and usage notes for this API key"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-key"></i> Generate API Key
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- API Key Display Modal -->
+<div class="modal fade" id="apiKeyDisplayModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-check-circle"></i> API Key Generated</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Important:</strong> This is the only time you'll see this API key. Please copy and store it securely.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">API Key</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control font-monospace" id="generatedApiKey" readonly>
+                        <button class="btn btn-outline-secondary" type="button" onclick="copyApiKey()">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Example Usage</label>
+                    <pre class="bg-light p-3 rounded"><code>curl -H "Authorization: Bearer <span id="exampleApiKey"></span>" \
+     https://your-domain.com/api/clusters</code></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check"></i> I've Copied the Key
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit API Key Modal -->
+<div class="modal fade" id="editApiKeyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-edit"></i> Edit API Key</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editApiKeyForm">
+                <div class="modal-body">
+                    <input type="hidden" id="editApiKeyId">
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="editApiKeyName" class="form-label">Key Name *</label>
+                                <input type="text" class="form-control" id="editApiKeyName" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="editApiKeyStatus" class="form-label">Status</label>
+                                <select class="form-select" id="editApiKeyStatus">
+                                    <option value="active">Active</option>
+                                    <option value="suspended">Suspended</option>
+                                    <option value="revoked">Revoked</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="editApiKeyRateLimit" class="form-label">Rate Limit (requests/hour)</label>
+                                <input type="number" class="form-control" id="editApiKeyRateLimit" min="1">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="editApiKeyIpWhitelist" class="form-label">IP Whitelist</label>
+                                <input type="text" class="form-control" id="editApiKeyIpWhitelist">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="editApiKeyDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="editApiKeyDescription" rows="3"></textarea>
+                    </div>
+
+                    <!-- Usage Statistics -->
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">Total Requests</h6>
+                                    <h4 id="editApiKeyTotalRequests">0</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">Last 24h</h6>
+                                    <h4 id="editApiKeyDailyRequests">0</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">Last Used</h6>
+                                    <small id="editApiKeyLastUsed">Never</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadApiKeys();
+    loadUsers();
+
+    // Set up event listeners
+    document.getElementById('searchApiKeys').addEventListener('input', filterApiKeys);
+    document.getElementById('filterStatus').addEventListener('change', filterApiKeys);
+    document.getElementById('apiKeyExpiration').addEventListener('change', toggleCustomExpiration);
+
+    // Form submissions
+    document.getElementById('createApiKeyForm').addEventListener('submit', createApiKey);
+    document.getElementById('editApiKeyForm').addEventListener('submit', updateApiKey);
+});
+
+function loadApiKeys() {
+    fetch('/api/api-keys')
+        .then(response => response.json())
+        .then(data => {
+            updateApiKeyStats(data);
+            populateApiKeysTable(data.api_keys || []);
+        })
+        .catch(error => {
+            console.error('Error loading API keys:', error);
+            showToast('Error loading API keys', 'error');
+        });
+}
+
+function loadUsers() {
+    fetch('/api/users')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('apiKeyOwner');
+            select.innerHTML = '<option value="">Select user...</option>';
+            (data.users || []).forEach(user => {
+                select.innerHTML += `<option value="${user.id}">${user.username} (${user.email})</option>`;
+            });
+        })
+        .catch(error => console.error('Error loading users:', error));
+}
+
+function updateApiKeyStats(data) {
+    document.getElementById('total-api-keys').textContent = data.total || 0;
+    document.getElementById('active-api-keys').textContent = data.active || 0;
+    document.getElementById('expiring-api-keys').textContent = data.expiring_soon || 0;
+    document.getElementById('daily-api-usage').textContent = data.daily_usage || 0;
+}
+
+function populateApiKeysTable(apiKeys) {
+    const tbody = document.getElementById('apiKeysTableBody');
+    tbody.innerHTML = '';
+
+    apiKeys.forEach(key => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${key.name}</td>
+            <td><code>${key.key_preview || key.key.substring(0, 8) + '...'}</code></td>
+            <td>${key.owner_username}</td>
+            <td>
+                <span class="badge bg-info">${(key.permissions || []).length} permissions</span>
+            </td>
+            <td>
+                <span class="badge bg-${getStatusColor(key.status)}">${key.status}</span>
+            </td>
+            <td>${formatDate(key.created_at)}</td>
+            <td>${key.expires_at ? formatDate(key.expires_at) : 'Never'}</td>
+            <td>${key.last_used_at ? formatDate(key.last_used_at) : 'Never'}</td>
+            <td>${key.usage_count || 0}</td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" onclick="editApiKey(${key.id})" title="Edit">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-outline-warning" onclick="rotateApiKey(${key.id})" title="Rotate">
+                        <i class="fas fa-redo"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="deleteApiKey(${key.id})" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function getStatusColor(status) {
+    const colors = {
+        'active': 'success',
+        'expired': 'warning',
+        'revoked': 'danger',
+        'suspended': 'secondary'
+    };
+    return colors[status] || 'secondary';
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return 'N/A';
+    return new Date(dateStr).toLocaleDateString();
+}
+
+function toggleCustomExpiration() {
+    const select = document.getElementById('apiKeyExpiration');
+    const customField = document.getElementById('apiKeyCustomExpiration');
+    customField.disabled = select.value !== 'custom';
+    if (select.value !== 'custom') {
+        customField.value = '';
+    }
+}
+
+function createApiKey(e) {
+    e.preventDefault();
+
+    const formData = {
+        name: document.getElementById('apiKeyName').value,
+        owner_id: document.getElementById('apiKeyOwner').value,
+        expiration: document.getElementById('apiKeyExpiration').value,
+        custom_expiration: document.getElementById('apiKeyCustomExpiration').value,
+        permissions: getSelectedPermissions(),
+        rate_limit: parseInt(document.getElementById('apiKeyRateLimit').value),
+        ip_whitelist: document.getElementById('apiKeyIpWhitelist').value,
+        description: document.getElementById('apiKeyDescription').value
+    };
+
+    fetch('/api/api-keys', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('generatedApiKey').value = data.api_key;
+            document.getElementById('exampleApiKey').textContent = data.api_key;
+
+            const createModal = bootstrap.Modal.getInstance(document.getElementById('createApiKeyModal'));
+            createModal.hide();
+
+            const displayModal = new bootstrap.Modal(document.getElementById('apiKeyDisplayModal'));
+            displayModal.show();
+
+            loadApiKeys();
+            document.getElementById('createApiKeyForm').reset();
+            showToast('API key generated successfully', 'success');
+        } else {
+            showToast(data.error || 'Failed to create API key', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error creating API key:', error);
+        showToast('Error creating API key', 'error');
+    });
+}
+
+function getSelectedPermissions() {
+    const permissions = [];
+    const checkboxes = [
+        'permReadData', 'permWriteData', 'permManageUsers', 'permManageClusters',
+        'permViewMetrics', 'permManageSecurity', 'permSystemAdmin', 'permApiAccess'
+    ];
+
+    checkboxes.forEach(id => {
+        if (document.getElementById(id).checked) {
+            permissions.push(id.replace('perm', '').toLowerCase());
+        }
+    });
+
+    return permissions;
+}
+
+function editApiKey(id) {
+    fetch(`/api/api-keys/${id}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const key = data.api_key;
+                document.getElementById('editApiKeyId').value = key.id;
+                document.getElementById('editApiKeyName').value = key.name;
+                document.getElementById('editApiKeyStatus').value = key.status;
+                document.getElementById('editApiKeyRateLimit').value = key.rate_limit;
+                document.getElementById('editApiKeyIpWhitelist').value = key.ip_whitelist || '';
+                document.getElementById('editApiKeyDescription').value = key.description || '';
+                document.getElementById('editApiKeyTotalRequests').textContent = key.total_requests || 0;
+                document.getElementById('editApiKeyDailyRequests').textContent = key.daily_requests || 0;
+                document.getElementById('editApiKeyLastUsed').textContent = key.last_used_at ? formatDate(key.last_used_at) : 'Never';
+
+                const modal = new bootstrap.Modal(document.getElementById('editApiKeyModal'));
+                modal.show();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading API key:', error);
+            showToast('Error loading API key details', 'error');
+        });
+}
+
+function updateApiKey(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('editApiKeyId').value;
+    const formData = {
+        name: document.getElementById('editApiKeyName').value,
+        status: document.getElementById('editApiKeyStatus').value,
+        rate_limit: parseInt(document.getElementById('editApiKeyRateLimit').value),
+        ip_whitelist: document.getElementById('editApiKeyIpWhitelist').value,
+        description: document.getElementById('editApiKeyDescription').value
+    };
+
+    fetch(`/api/api-keys/${id}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editApiKeyModal'));
+            modal.hide();
+            loadApiKeys();
+            showToast('API key updated successfully', 'success');
+        } else {
+            showToast(data.error || 'Failed to update API key', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error updating API key:', error);
+        showToast('Error updating API key', 'error');
+    });
+}
+
+function rotateApiKey(id) {
+    if (confirm('Are you sure you want to rotate this API key? The old key will be immediately invalidated.')) {
+        fetch(`/api/api-keys/${id}/rotate`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('generatedApiKey').value = data.new_api_key;
+                document.getElementById('exampleApiKey').textContent = data.new_api_key;
+
+                const modal = new bootstrap.Modal(document.getElementById('apiKeyDisplayModal'));
+                modal.show();
+
+                loadApiKeys();
+                showToast('API key rotated successfully', 'success');
+            } else {
+                showToast(data.error || 'Failed to rotate API key', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error rotating API key:', error);
+            showToast('Error rotating API key', 'error');
+        });
+    }
+}
+
+function deleteApiKey(id) {
+    if (confirm('Are you sure you want to delete this API key? This action cannot be undone.')) {
+        fetch(`/api/api-keys/${id}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                loadApiKeys();
+                showToast('API key deleted successfully', 'success');
+            } else {
+                showToast(data.error || 'Failed to delete API key', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error deleting API key:', error);
+            showToast('Error deleting API key', 'error');
+        });
+    }
+}
+
+function filterApiKeys() {
+    const searchTerm = document.getElementById('searchApiKeys').value.toLowerCase();
+    const statusFilter = document.getElementById('filterStatus').value;
+    const rows = document.querySelectorAll('#apiKeysTableBody tr');
+
+    rows.forEach(row => {
+        const name = row.cells[0].textContent.toLowerCase();
+        const owner = row.cells[2].textContent.toLowerCase();
+        const status = row.cells[4].textContent.toLowerCase();
+
+        const matchesSearch = name.includes(searchTerm) || owner.includes(searchTerm);
+        const matchesStatus = !statusFilter || status.includes(statusFilter);
+
+        row.style.display = matchesSearch && matchesStatus ? '' : 'none';
+    });
+}
+
+function copyApiKey() {
+    const input = document.getElementById('generatedApiKey');
+    input.select();
+    document.execCommand('copy');
+    showToast('API key copied to clipboard', 'success');
+}
+
+function showToast(message, type = 'info') {
+    // Implementation for toast notifications
+    console.log(`${type.toUpperCase()}: ${message}`);
+}
+</script>

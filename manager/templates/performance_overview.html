@@ -1,0 +1,754 @@
+[[extend 'layout.html']]
+
+[[block page_content]]
+<div class="row mb-4">
+    <div class="col-12">
+        <h2>Performance Tuning Overview</h2>
+        <p class="text-muted">Configure and optimize ArticDBM's performance features for maximum throughput</p>
+    </div>
+</div>
+
+<!-- Performance Metrics Overview -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="metric-card success">
+            <div class="metric-value">95.4%</div>
+            <div class="metric-label">Cache Hit Ratio</div>
+            <small class="text-muted">L1: 89% | L2: 94% | L3: 97%</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card info">
+            <div class="metric-value">2.1ms</div>
+            <div class="metric-label">Avg Query Latency</div>
+            <small class="text-muted">P95: 4.2ms | P99: 8.1ms</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card warning">
+            <div class="metric-value">45.2K</div>
+            <div class="metric-label">Queries/Second</div>
+            <small class="text-muted">Peak: 68.5K QPS</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card danger">
+            <div class="metric-value">78%</div>
+            <div class="metric-label">CPU Utilization</div>
+            <small class="text-muted">NUMA-optimized</small>
+        </div>
+    </div>
+</div>
+
+<!-- Performance Configuration Tabs -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" id="performanceTabs">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-bs-toggle="tab" href="#mlOptimization">
+                            <i class="bi bi-cpu"></i> ML Optimization
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#cacheSettings">
+                            <i class="bi bi-layers"></i> Cache Configuration
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#xdpSettings">
+                            <i class="bi bi-lightning"></i> XDP/AF_XDP
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#numaSettings">
+                            <i class="bi bi-diagram-3"></i> NUMA Optimization
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#connectionPools">
+                            <i class="bi bi-collection"></i> Connection Pools
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content">
+                    <!-- ML Optimization Tab -->
+                    <div class="tab-pane fade show active" id="mlOptimization">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5>Machine Learning Query Optimization</h5>
+                                <p class="text-muted">AI-powered query routing and performance prediction</p>
+
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label">Enable ML Optimization</label>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="mlEnabled" checked
+                                                   onchange="toggleMLOptimization(this.checked)">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">ML Model Provider</label>
+                                    <select class="form-select" id="mlProvider" onchange="updateMLProvider(this.value)">
+                                        <option value="openai" selected>OpenAI GPT-4</option>
+                                        <option value="anthropic">Anthropic Claude</option>
+                                        <option value="ollama">Local Ollama</option>
+                                        <option value="custom">Custom Model</option>
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Optimization Aggressiveness</label>
+                                    <div class="d-flex align-items-center gap-3">
+                                        <span class="text-muted">Conservative</span>
+                                        <input type="range" class="form-range" id="mlAggression" min="1" max="5" value="3"
+                                               onchange="updateMLAggression(this.value)">
+                                        <span class="text-muted">Aggressive</span>
+                                    </div>
+                                    <small class="text-muted">Level <span id="mlAggressionValue">3</span> - Balanced optimization</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Prediction Confidence Threshold</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" value="85" min="50" max="99">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                    <small class="text-muted">Minimum confidence to apply ML suggestions</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Learning Rate</label>
+                                    <select class="form-select">
+                                        <option value="slow">Slow (Safe)</option>
+                                        <option value="medium" selected>Medium</option>
+                                        <option value="fast">Fast (Experimental)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <h6>ML Performance Metrics</h6>
+                                <div class="metric-grid">
+                                    <div class="metric-item">
+                                        <div class="metric-value text-success">92.3%</div>
+                                        <div class="metric-label">Prediction Accuracy</div>
+                                    </div>
+                                    <div class="metric-item">
+                                        <div class="metric-value text-info">1,247</div>
+                                        <div class="metric-label">Optimized Queries</div>
+                                    </div>
+                                    <div class="metric-item">
+                                        <div class="metric-value text-warning">34.2%</div>
+                                        <div class="metric-label">Avg Performance Gain</div>
+                                    </div>
+                                </div>
+
+                                <h6 class="mt-4">Recent ML Optimizations</h6>
+                                <div class="list-group list-group-flush">
+                                    <div class="list-group-item d-flex justify-content-between">
+                                        <span>Index recommendation for user_orders</span>
+                                        <small class="text-success">+45% faster</small>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between">
+                                        <span>Query plan optimization for analytics</span>
+                                        <small class="text-success">+28% faster</small>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between">
+                                        <span>Connection routing improvement</span>
+                                        <small class="text-success">+12% faster</small>
+                                    </div>
+                                </div>
+
+                                <div class="mt-3">
+                                    <button class="btn btn-primary" onclick="runMLAnalysis()">
+                                        <i class="bi bi-play-circle"></i> Run ML Analysis
+                                    </button>
+                                    <button class="btn btn-outline-secondary" onclick="exportMLReport()">
+                                        <i class="bi bi-download"></i> Export Report
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cache Configuration Tab -->
+                    <div class="tab-pane fade" id="cacheSettings">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <h5>L1 Cache (Kernel/XDP)</h5>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label">Enable L1 Cache</label>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" checked>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Cache Size</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" value="256" min="64" max="2048">
+                                        <span class="input-group-text">MB</span>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">TTL (seconds)</label>
+                                    <input type="number" class="form-control" value="60" min="1" max="3600">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Eviction Policy</label>
+                                    <select class="form-select">
+                                        <option value="lru" selected>LRU</option>
+                                        <option value="lfu">LFU</option>
+                                        <option value="random">Random</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <h5>L2 Cache (Redis)</h5>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label">Enable L2 Cache</label>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" checked>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Cache Size</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" value="2" min="1" max="32">
+                                        <span class="input-group-text">GB</span>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">TTL (seconds)</label>
+                                    <input type="number" class="form-control" value="300" min="60" max="86400">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Compression</label>
+                                    <select class="form-select">
+                                        <option value="none">None</option>
+                                        <option value="gzip" selected>GZip</option>
+                                        <option value="lz4">LZ4</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <h5>Cache Analytics</h5>
+                                <canvas id="cacheHitChart" height="150"></canvas>
+
+                                <div class="mt-3">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>L1 Hit Rate</span>
+                                        <strong class="text-success">89.2%</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>L2 Hit Rate</span>
+                                        <strong class="text-info">94.1%</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Overall Hit Rate</span>
+                                        <strong class="text-primary">95.4%</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Cache Misses</span>
+                                        <strong class="text-warning">4.6%</strong>
+                                    </div>
+                                </div>
+
+                                <button class="btn btn-warning w-100 mt-3" onclick="clearCache()">
+                                    <i class="bi bi-trash"></i> Clear All Caches
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- XDP/AF_XDP Tab -->
+                    <div class="tab-pane fade" id="xdpSettings">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5>XDP (eXpress Data Path) Configuration</h5>
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i>
+                                    XDP provides kernel-level packet processing for extreme performance. Requires Linux 5.4+
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label">Enable XDP Acceleration</label>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="xdpEnabled"
+                                                   onchange="toggleXDP(this.checked)">
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">Disabled in demo environment</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">XDP Mode</label>
+                                    <select class="form-select" disabled>
+                                        <option value="native" selected>Native (Hardware)</option>
+                                        <option value="generic">Generic (Software)</option>
+                                        <option value="offload">Offload (SmartNIC)</option>
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Network Interface</label>
+                                    <select class="form-select" disabled>
+                                        <option value="eth0" selected>eth0 (Primary)</option>
+                                        <option value="eth1">eth1 (Secondary)</option>
+                                    </select>
+                                </div>
+
+                                <h6 class="mt-4">AF_XDP Settings</h6>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label">Enable AF_XDP Sockets</label>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" disabled>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Socket Batch Size</label>
+                                    <input type="number" class="form-control" value="64" min="16" max="256" disabled>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <h6>Performance Impact</h6>
+                                <div class="metric-grid">
+                                    <div class="metric-item">
+                                        <div class="metric-value text-info">N/A</div>
+                                        <div class="metric-label">Packets/Second</div>
+                                    </div>
+                                    <div class="metric-item">
+                                        <div class="metric-value text-warning">Disabled</div>
+                                        <div class="metric-label">CPU Usage</div>
+                                    </div>
+                                    <div class="metric-item">
+                                        <div class="metric-value text-secondary">0</div>
+                                        <div class="metric-label">Packet Drops</div>
+                                    </div>
+                                </div>
+
+                                <h6 class="mt-4">XDP Program Status</h6>
+                                <div class="list-group list-group-flush">
+                                    <div class="list-group-item d-flex justify-content-between">
+                                        <span>IP Blocklist</span>
+                                        <span class="badge bg-secondary">Disabled</span>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between">
+                                        <span>Rate Limiter</span>
+                                        <span class="badge bg-secondary">Disabled</span>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between">
+                                        <span>Load Balancer</span>
+                                        <span class="badge bg-secondary">Disabled</span>
+                                    </div>
+                                </div>
+
+                                <div class="alert alert-warning mt-3">
+                                    <strong>Production Note:</strong> XDP features are disabled in the demo environment but are fully functional in production deployments with proper kernel support.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- NUMA Optimization Tab -->
+                    <div class="tab-pane fade" id="numaSettings">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5>NUMA (Non-Uniform Memory Access) Optimization</h5>
+                                <p class="text-muted">Optimize memory locality for multi-socket systems</p>
+
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label">Enable NUMA Optimization</label>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" checked
+                                                   onchange="toggleNUMA(this.checked)">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">CPU Affinity Policy</label>
+                                    <select class="form-select">
+                                        <option value="local" selected>Local NUMA Node</option>
+                                        <option value="round_robin">Round Robin</option>
+                                        <option value="manual">Manual Assignment</option>
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Memory Allocation Policy</label>
+                                    <select class="form-select">
+                                        <option value="local" selected>Local Node Preferred</option>
+                                        <option value="interleave">Interleave</option>
+                                        <option value="bind">Bind to Node</option>
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Cross-NUMA Threshold</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" value="80" min="50" max="95">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                    <small class="text-muted">CPU usage before using remote NUMA nodes</small>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <h6>NUMA Topology</h6>
+                                <div class="numa-topology">
+                                    <div class="numa-node">
+                                        <h6>NUMA Node 0</h6>
+                                        <div class="progress mb-2">
+                                            <div class="progress-bar bg-primary" style="width: 65%">
+                                                CPU: 65%
+                                            </div>
+                                        </div>
+                                        <div class="progress mb-2">
+                                            <div class="progress-bar bg-info" style="width: 42%">
+                                                Memory: 42%
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">Workers: 8, Connections: 245</small>
+                                    </div>
+
+                                    <div class="numa-node mt-3">
+                                        <h6>NUMA Node 1</h6>
+                                        <div class="progress mb-2">
+                                            <div class="progress-bar bg-primary" style="width: 58%">
+                                                CPU: 58%
+                                            </div>
+                                        </div>
+                                        <div class="progress mb-2">
+                                            <div class="progress-bar bg-info" style="width: 38%">
+                                                Memory: 38%
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">Workers: 8, Connections: 198</small>
+                                    </div>
+                                </div>
+
+                                <h6 class="mt-4">Performance Metrics</h6>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Memory Locality</span>
+                                    <strong class="text-success">94.2%</strong>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Cross-NUMA Traffic</span>
+                                    <strong class="text-warning">5.8%</strong>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Load Balance</span>
+                                    <strong class="text-info">0.92</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Connection Pools Tab -->
+                    <div class="tab-pane fade" id="connectionPools">
+                        <div class="row">
+                            <div class="col-12">
+                                <h5>Connection Pool Configuration</h5>
+                                <p class="text-muted">Optimize database connection pooling for maximum efficiency</p>
+
+                                <div class="table-responsive">
+                                    <table class="table table-bordered">
+                                        <thead>
+                                            <tr>
+                                                <th>Database</th>
+                                                <th>Max Connections</th>
+                                                <th>Min Connections</th>
+                                                <th>Idle Timeout</th>
+                                                <th>Max Lifetime</th>
+                                                <th>Active</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td><strong>MySQL Primary</strong></td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" value="100" min="10" max="1000">
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" value="10" min="1" max="100">
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" value="300" min="60" max="3600">
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" value="1800" min="300" max="7200">
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-success">67/100</span>
+                                                </td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary" onclick="updatePool('mysql')">
+                                                        <i class="bi bi-check"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>PostgreSQL Analytics</strong></td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" value="50" min="5" max="500">
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" value="5" min="1" max="50">
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" value="600" min="60" max="3600">
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" value="3600" min="300" max="7200">
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-info">23/50</span>
+                                                </td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary" onclick="updatePool('postgres')">
+                                                        <i class="bi bi-check"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="row mt-4">
+                                    <div class="col-md-6">
+                                        <h6>Global Pool Settings</h6>
+                                        <div class="mb-3">
+                                            <label class="form-label">Connection Warmup Strategy</label>
+                                            <select class="form-select">
+                                                <option value="lazy">Lazy (On-demand)</option>
+                                                <option value="eager" selected>Eager (Pre-create)</option>
+                                                <option value="smart">Smart (ML-based)</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label">Health Check Interval</label>
+                                            <div class="input-group">
+                                                <input type="number" class="form-control" value="30" min="5" max="300">
+                                                <span class="input-group-text">seconds</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" checked>
+                                            <label class="form-check-label">
+                                                Enable connection validation
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <h6>Pool Performance</h6>
+                                        <canvas id="poolUtilizationChart" height="100"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+[[end]]
+
+[[block page_scripts]]
+<script>
+// Performance configuration functions
+function toggleMLOptimization(enabled) {
+    $.ajax({
+        url: '/api/performance/ml',
+        method: 'PUT',
+        data: { enabled: enabled },
+        success: function() {
+            showSuccess(`ML optimization ${enabled ? 'enabled' : 'disabled'}`);
+        }
+    });
+}
+
+function updateMLAggression(value) {
+    document.getElementById('mlAggressionValue').textContent = value;
+    const descriptions = {
+        '1': 'Very Conservative',
+        '2': 'Conservative',
+        '3': 'Balanced optimization',
+        '4': 'Aggressive',
+        '5': 'Very Aggressive'
+    };
+    document.querySelector('#mlAggression + small').innerHTML = `Level ${value} - ${descriptions[value]}`;
+}
+
+function runMLAnalysis() {
+    showLoading();
+    $.ajax({
+        url: '/api/performance/ml/analyze',
+        method: 'POST',
+        success: function(data) {
+            hideLoading();
+            showSuccess(`Analysis complete. Found ${data.optimizations} potential optimizations.`);
+        }
+    });
+}
+
+function toggleXDP(enabled) {
+    if (enabled) {
+        showError('XDP is disabled in demo environment');
+        document.getElementById('xdpEnabled').checked = false;
+    }
+}
+
+function toggleNUMA(enabled) {
+    $.ajax({
+        url: '/api/performance/numa',
+        method: 'PUT',
+        data: { enabled: enabled },
+        success: function() {
+            showSuccess(`NUMA optimization ${enabled ? 'enabled' : 'disabled'}`);
+        }
+    });
+}
+
+function clearCache() {
+    confirmAction(
+        'Clear All Caches?',
+        'This will temporarily reduce performance until caches are rebuilt.',
+        function() {
+            showLoading();
+            $.ajax({
+                url: '/api/performance/cache/clear',
+                method: 'POST',
+                success: function() {
+                    hideLoading();
+                    showSuccess('All caches cleared successfully');
+                    setTimeout(() => location.reload(), 1500);
+                }
+            });
+        }
+    );
+}
+
+function updatePool(database) {
+    showSuccess(`${database} connection pool updated`);
+}
+
+// Initialize charts
+$(document).ready(function() {
+    // Cache Hit Chart
+    const cacheCtx = document.getElementById('cacheHitChart').getContext('2d');
+    new Chart(cacheCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['L1 Hits', 'L2 Hits', 'Cache Miss'],
+            datasets: [{
+                data: [89, 6, 5],
+                backgroundColor: [
+                    'rgba(39, 174, 96, 0.8)',
+                    'rgba(52, 152, 219, 0.8)',
+                    'rgba(231, 76, 60, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+
+    // Pool Utilization Chart
+    const poolCtx = document.getElementById('poolUtilizationChart').getContext('2d');
+    new Chart(poolCtx, {
+        type: 'line',
+        data: {
+            labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
+            datasets: [{
+                label: 'MySQL Pool',
+                data: [30, 45, 67, 89, 76, 54],
+                borderColor: 'rgb(52, 152, 219)',
+                tension: 0.1
+            }, {
+                label: 'PostgreSQL Pool',
+                data: [15, 23, 34, 45, 38, 28],
+                borderColor: 'rgb(155, 89, 182)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            }
+        }
+    });
+});
+
+// Styling
+$('<style>').appendTo('head').html(`
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    .metric-item {
+        text-align: center;
+        padding: 15px;
+        background: rgba(0,0,0,0.02);
+        border-radius: 6px;
+    }
+    .metric-item .metric-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .metric-item .metric-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+    .numa-node {
+        padding: 15px;
+        background: rgba(0,0,0,0.02);
+        border-radius: 6px;
+        border-left: 4px solid #007bff;
+    }
+`);
+</script>
+[[end]]

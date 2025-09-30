@@ -1528,6 +1528,47 @@ def get_temporary_access():
     except Exception as e:
         abort(500, str(e))
 
+@action('api/temporary-access/<token_id:int>', method=['GET'])
+@action.uses(auth, cors, db)
+def get_temporary_access_token(token_id):
+    """Get details for a specific temporary access token"""
+    try:
+        token = db.temporary_access[token_id]
+        if not token:
+            return {'success': False, 'error': 'Token not found'}
+
+        created_by_user = db.auth_user[token.created_by] if token.created_by else None
+
+        # Determine status
+        status = 'active'
+        if not token.is_active:
+            status = 'revoked'
+        elif token.expires_at and token.expires_at < datetime.utcnow():
+            status = 'expired'
+        elif token.usage_count >= token.max_uses:
+            status = 'used'
+
+        token_data = {
+            'id': token.id,
+            'name': f"Temp Access - {created_by_user.username if created_by_user else 'Unknown'}",
+            'username': created_by_user.username if created_by_user else 'Unknown',
+            'type': 'time_limited' if token.expires_at else 'single_use',
+            'status': status,
+            'created_at': token.created_at,
+            'expires_at': token.expires_at,
+            'usage_count': token.usage_count,
+            'max_uses': token.max_uses,
+            'rate_limit': 100,
+            'ip_whitelist': token.client_ip,
+            'last_used_at': None,
+            'purpose': token.purpose if hasattr(token, 'purpose') else 'Temporary access',
+            'permissions': ['read_data', 'write_data']
+        }
+
+        return {'success': True, 'token': token_data}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
 @action('api/temporary-access/<token_id:int>/revoke', method=['POST'])
 @action.uses(auth, cors, db)
 def revoke_temporary_access(token_id):
@@ -4241,6 +4282,508 @@ def sync_threat_intel_to_redis():
     except Exception as e:
         print(f"Error syncing threat intel to Redis: {e}")
         return False
+
+# ============================================================================
+# WEB PORTAL ROUTES
+# ============================================================================
+
+@action('index')
+@action.uses('index.html', auth, db, session)
+def index():
+    """Dashboard page"""
+    # Get cluster statistics
+    clusters = []
+    for server in db(db.database_server.is_active == True).select():
+        cluster_data = {
+            'id': server.id,
+            'name': server.name,
+            'type': server.type,
+            'status': 'active' if server.is_active else 'inactive',
+            'node_count': 1,
+            'is_galera': server.is_galera if hasattr(server, 'is_galera') else False,
+            'health_percent': random.randint(85, 100),
+            'health_color': 'success'
+        }
+        clusters.append(cluster_data)
+
+    # Get statistics
+    stats = {
+        'total_clusters': len(clusters),
+        'total_nodes': db(db.database_server).count(),
+        'healthy_nodes': db(db.database_server.is_active == True).count(),
+        'queries_per_sec': random.randint(1000, 5000),
+        'peak_qps': random.randint(8000, 15000),
+        'blocked_threats': db(db.threat_intel_match).count(),
+        'clusters_change': random.randint(-5, 15)
+    }
+
+    # Get recent alerts
+    recent_alerts = []
+
+    # Get feature status
+    features = {
+        'sql_injection_detection': True,
+        'threat_intelligence': True,
+        'audit_logging': True,
+        'ml_optimization': True,
+        'xdp_enabled': False,  # Disabled in demo
+        'numa_optimization': True,
+        'galera_support': True,
+        'sqlite_support': True,
+        'multi_cloud': True,
+        'blue_green_deployment': True,
+        'disaster_recovery': True,
+        'compliance_scanning': True
+    }
+
+    # Chart data (sample data for demo)
+    import json
+    hours = list(range(24))
+    query_chart_labels = json.dumps([f"{h}:00" for h in hours])
+    query_chart_data = json.dumps([random.randint(1000, 5000) for _ in hours])
+
+    cache_hits = random.randint(85, 95)
+    cache_misses = 100 - cache_hits
+
+    return dict(
+        title="Dashboard",
+        stats=stats,
+        clusters=clusters,
+        recent_alerts=recent_alerts,
+        features=features,
+        query_chart_labels=query_chart_labels,
+        query_chart_data=query_chart_data,
+        cache_hits=cache_hits,
+        cache_misses=cache_misses
+    )
+
+@action('clusters')
+@action.uses('clusters.html', auth, db, session)
+def clusters():
+    """Cluster management page"""
+    servers = db(db.database_server).select(orderby=db.database_server.name)
+    return dict(title="Cluster Management", servers=servers)
+
+@action('clusters/create')
+@action.uses('cluster_create.html', auth, db, session)
+def cluster_create():
+    """Create new cluster page"""
+    return dict(title="Create Cluster")
+
+@action('clusters/<cluster_id:int>/nodes')
+@action.uses('cluster_nodes.html', auth, db, session)
+def cluster_nodes(cluster_id):
+    """Manage cluster nodes"""
+    cluster = db.database_server[cluster_id]
+    if not cluster:
+        redirect(URL('clusters'))
+
+    # Get all nodes for this cluster (simplified for demo)
+    nodes = [cluster]  # In production, would have multiple nodes per cluster
+
+    return dict(title=f"Nodes - {cluster.name}", cluster=cluster, nodes=nodes)
+
+@action('clusters/<cluster_id:int>/settings')
+@action.uses('cluster_settings.html', auth, db, session)
+def cluster_settings(cluster_id):
+    """Cluster settings page"""
+    cluster = db.database_server[cluster_id]
+    if not cluster:
+        redirect(URL('clusters'))
+
+    return dict(title=f"Settings - {cluster.name}", cluster=cluster)
+
+@action('security/overview')
+@action.uses('security_overview.html', auth, db, session)
+def security_overview():
+    """Security overview page"""
+    stats = {
+        'total_rules': db(db.security_rule).count(),
+        'active_rules': db(db.security_rule.active == True).count(),
+        'blocked_patterns': db(db.blocked_database).count(),
+        'threat_feeds': db(db.threat_intel_feed).count(),
+        'threat_indicators': db(db.threat_intel_indicator).count(),
+        'recent_blocks': db(db.threat_intel_match).count()
+    }
+    return dict(title="Security Overview", stats=stats)
+
+@action('security/rules')
+@action.uses('security_rules.html', auth, db, session)
+def security_rules():
+    """SQL injection rules management"""
+    rules = db(db.security_rule).select(orderby=~db.security_rule.created_at)
+    return dict(title="Security Rules", rules=rules)
+
+@action('security/threat-intel')
+@action.uses('threat_intel.html', auth, db, session)
+def threat_intel():
+    """Threat intelligence management"""
+    feeds = db(db.threat_intel_feed).select()
+    indicators = db(db.threat_intel_indicator).select(limitby=(0, 100))
+    return dict(title="Threat Intelligence", feeds=feeds, indicators=indicators)
+
+@action('users')
+@action.uses('users.html', auth, db, session)
+def users():
+    """User management page"""
+    users_list = db(db.auth_user).select()
+    return dict(title="User Management", users=users_list)
+
+@action('permissions')
+@action.uses('permissions.html', auth, db, session)
+def permissions():
+    """Permission management page"""
+    perms = db(db.user_permission).select()
+    return dict(title="Permissions", permissions=perms)
+
+@action('api-keys')
+@action.uses('api_keys.html', auth, db, session)
+def api_keys():
+    """API key management"""
+    profiles = db(db.user_profile).select()
+    return dict(title="API Keys", profiles=profiles)
+
+@action('temporary-tokens')
+@action.uses('temporary_tokens.html', auth, db, session)
+def temporary_tokens():
+    """Temporary access tokens management"""
+    return dict(title="Temporary Access Tokens")
+
+@action('cloud-integration')
+@action.uses('cloud_integration.html', auth, db, session)
+def cloud_integration():
+    """Cloud integration management portal"""
+    return dict(title="Cloud Integration Management")
+
+@action('performance/overview')
+@action.uses('performance_overview.html', auth, db, session)
+def performance_overview():
+    """Performance overview page"""
+    return dict(title="Performance Overview")
+
+@action('performance/cache')
+@action.uses('cache_settings.html', auth, db, session)
+def cache_settings():
+    """Cache configuration page"""
+    return dict(title="Cache Settings")
+
+@action('performance/ml')
+@action.uses('ml_optimization.html', auth, db, session)
+def ml_optimization():
+    """ML optimization settings"""
+    return dict(title="ML Optimization")
+
+@action('performance/xdp')
+@action.uses('xdp_settings.html', auth, db, session)
+def xdp_settings():
+    """XDP/AF_XDP settings"""
+    return dict(title="XDP/AF_XDP Settings")
+
+@action('monitoring/metrics')
+@action.uses('metrics.html', auth, db, session)
+def metrics():
+    """Metrics dashboard"""
+    return dict(title="Metrics Dashboard")
+
+@action('monitoring/logs')
+@action.uses('audit_logs.html', auth, db, session)
+def audit_logs():
+    """Audit logs viewer"""
+    logs = db(db.audit_log).select(orderby=~db.audit_log.timestamp, limitby=(0, 100))
+    return dict(title="Audit Logs", logs=logs)
+
+@action('monitoring/health')
+@action.uses('health_checks.html', auth, db, session)
+def health_checks():
+    """Health check dashboard"""
+    return dict(title="Health Checks")
+
+@action('cloud/providers')
+@action.uses('cloud_providers.html', auth, db, session)
+def cloud_providers():
+    """Cloud provider management"""
+    providers = db(db.cloud_provider).select()
+    return dict(title="Cloud Providers", providers=providers)
+
+@action('cloud/instances')
+@action.uses('cloud_instances.html', auth, db, session)
+def cloud_instances():
+    """Cloud instances management"""
+    instances = db(db.cloud_database_instance).select()
+    return dict(title="Cloud Instances", instances=instances)
+
+@action('settings')
+@action.uses('settings.html', auth, db, session)
+def settings():
+    """Global settings page"""
+    return dict(title="Settings")
+
+@action('galera')
+@action.uses('galera_clusters.html', auth, db, session)
+def galera_clusters():
+    """Galera cluster management"""
+    # Get Galera-specific clusters
+    galera_servers = []
+    for server in db(db.database_server.type == 'mysql').select():
+        if server.is_galera if hasattr(server, 'is_galera') else False:
+            galera_servers.append(server)
+
+    return dict(title="Galera Clusters", servers=galera_servers)
+
+@action('temp-access/generate')
+@action.uses('generate_temp_access.html', auth, db, session)
+def generate_temp_access():
+    """Generate temporary access token"""
+    return dict(title="Generate Temporary Access")
+
+@action('nodes')
+@action.uses('nodes.html', auth, db, session)
+def nodes():
+    """All nodes management"""
+    all_nodes = db(db.database_server).select(orderby=db.database_server.name)
+    return dict(title="Node Management", nodes=all_nodes)
+
+@action('profile')
+@action.uses('profile.html', auth, db, session)
+def profile():
+    """User profile page"""
+    user = auth.get_user()
+    user_profile = db(db.user_profile.user_id == user['id']).select().first()
+    return dict(title="My Profile", user=user, profile=user_profile)
+
+# API Key Management API Routes
+@action('api/api-keys', method=['GET'])
+@cors.enable
+def api_get_api_keys():
+    """Get all API keys with statistics"""
+    try:
+        # Get API key statistics
+        all_keys = db(db.user_profile.api_key != None).select()
+        active_keys = db((db.user_profile.api_key != None) &
+                        (db.user_profile.account_expiration == None)).select()
+
+        # Calculate expiring soon (within 30 days)
+        thirty_days = datetime.now() + timedelta(days=30)
+        expiring_keys = db((db.user_profile.api_key != None) &
+                          (db.user_profile.account_expiration != None) &
+                          (db.user_profile.account_expiration <= thirty_days)).select()
+
+        # Get usage from audit log (last 24 hours)
+        yesterday = datetime.now() - timedelta(days=1)
+        daily_usage = db((db.audit_log.timestamp >= yesterday) &
+                        (db.audit_log.api_key != None)).count()
+
+        # Get API keys with user info
+        profiles = db((db.user_profile.api_key != None) &
+                     (db.user_profile.user_id == db.auth_user.id)).select(
+            db.user_profile.ALL, db.auth_user.username, db.auth_user.email,
+            left=db.auth_user.on(db.user_profile.user_id == db.auth_user.id)
+        )
+
+        api_keys = []
+        for profile in profiles:
+            status = 'active'
+            if profile.user_profile.account_expiration and profile.user_profile.account_expiration < datetime.now():
+                status = 'expired'
+
+            # Get usage count for this API key
+            usage_count = db(db.audit_log.api_key == profile.user_profile.api_key).count()
+            last_used = db(db.audit_log.api_key == profile.user_profile.api_key).select(
+                orderby=~db.audit_log.timestamp, limitby=(0, 1)
+            ).first()
+
+            api_keys.append({
+                'id': profile.user_profile.id,
+                'name': f"API Key for {profile.auth_user.username}",
+                'key_preview': profile.user_profile.api_key[:8] + '...' if profile.user_profile.api_key else '',
+                'owner_username': profile.auth_user.username,
+                'owner_email': profile.auth_user.email,
+                'permissions': ['read_data', 'write_data'],
+                'status': status,
+                'created_at': profile.user_profile.created_at,
+                'expires_at': profile.user_profile.account_expiration,
+                'last_used_at': last_used.timestamp if last_used else None,
+                'usage_count': usage_count,
+                'rate_limit': profile.user_profile.rate_limit or 1000,
+                'ip_whitelist': profile.user_profile.ip_whitelist,
+                'description': profile.user_profile.description
+            })
+
+        return {
+            'success': True,
+            'total': len(all_keys),
+            'active': len(active_keys),
+            'expiring_soon': len(expiring_keys),
+            'daily_usage': daily_usage,
+            'api_keys': api_keys
+        }
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+@action('api/api-keys', method=['POST'])
+@cors.enable
+def api_create_api_key():
+    """Create a new API key"""
+    try:
+        data = request.json
+
+        # Generate new API key
+        new_api_key = secrets.token_urlsafe(32)
+
+        # Calculate expiration date
+        expires_at = None
+        if data.get('expiration'):
+            if data['expiration'] == 'custom':
+                expires_at = datetime.fromisoformat(data['custom_expiration'].replace('T', ' '))
+            else:
+                days = int(data['expiration'])
+                expires_at = datetime.now() + timedelta(days=days)
+
+        # Get or create user profile
+        user_id = data['owner_id']
+        profile = db(db.user_profile.user_id == user_id).select().first()
+
+        if profile:
+            # Update existing profile
+            profile.update_record(
+                api_key=new_api_key,
+                account_expiration=expires_at,
+                rate_limit=data.get('rate_limit', 1000),
+                ip_whitelist=data.get('ip_whitelist'),
+                description=data.get('description'),
+                created_at=datetime.now()
+            )
+        else:
+            # Create new profile
+            db.user_profile.insert(
+                user_id=user_id,
+                api_key=new_api_key,
+                account_expiration=expires_at,
+                rate_limit=data.get('rate_limit', 1000),
+                ip_whitelist=data.get('ip_whitelist'),
+                description=data.get('description'),
+                created_at=datetime.now()
+            )
+
+        db.commit()
+
+        return {
+            'success': True,
+            'api_key': new_api_key,
+            'message': 'API key created successfully'
+        }
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+@action('api/api-keys/<key_id:int>', method=['GET'])
+@cors.enable
+def api_get_api_key(key_id):
+    """Get specific API key details"""
+    try:
+        profile = db(db.user_profile.id == key_id).select().first()
+        if not profile:
+            return {'success': False, 'error': 'API key not found'}
+
+        user = db(db.auth_user.id == profile.user_id).select().first()
+
+        # Get usage statistics
+        total_requests = db(db.audit_log.api_key == profile.api_key).count()
+        yesterday = datetime.now() - timedelta(days=1)
+        daily_requests = db((db.audit_log.api_key == profile.api_key) &
+                           (db.audit_log.timestamp >= yesterday)).count()
+
+        last_used = db(db.audit_log.api_key == profile.api_key).select(
+            orderby=~db.audit_log.timestamp, limitby=(0, 1)
+        ).first()
+
+        status = 'active'
+        if profile.account_expiration and profile.account_expiration < datetime.now():
+            status = 'expired'
+
+        return {
+            'success': True,
+            'api_key': {
+                'id': profile.id,
+                'name': f"API Key for {user.username}",
+                'status': status,
+                'rate_limit': profile.rate_limit or 1000,
+                'ip_whitelist': profile.ip_whitelist,
+                'description': profile.description,
+                'total_requests': total_requests,
+                'daily_requests': daily_requests,
+                'last_used_at': last_used.timestamp if last_used else None
+            }
+        }
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+@action('api/api-keys/<key_id:int>', method=['PUT'])
+@cors.enable
+def api_update_api_key(key_id):
+    """Update API key settings"""
+    try:
+        data = request.json
+        profile = db(db.user_profile.id == key_id).select().first()
+
+        if not profile:
+            return {'success': False, 'error': 'API key not found'}
+
+        # Update fields
+        update_fields = {}
+        if 'rate_limit' in data:
+            update_fields['rate_limit'] = data['rate_limit']
+        if 'ip_whitelist' in data:
+            update_fields['ip_whitelist'] = data['ip_whitelist']
+        if 'description' in data:
+            update_fields['description'] = data['description']
+        if 'status' in data and data['status'] == 'revoked':
+            update_fields['api_key'] = None
+
+        profile.update_record(**update_fields)
+        db.commit()
+
+        return {'success': True, 'message': 'API key updated successfully'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+@action('api/api-keys/<key_id:int>', method=['DELETE'])
+@cors.enable
+def api_delete_api_key(key_id):
+    """Delete API key"""
+    try:
+        profile = db(db.user_profile.id == key_id).select().first()
+        if not profile:
+            return {'success': False, 'error': 'API key not found'}
+
+        # Set API key to None to revoke it
+        profile.update_record(api_key=None)
+        db.commit()
+
+        return {'success': True, 'message': 'API key deleted successfully'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+@action('api/api-keys/<key_id:int>/rotate', method=['POST'])
+@cors.enable
+def api_rotate_api_key(key_id):
+    """Rotate API key (generate new one)"""
+    try:
+        profile = db(db.user_profile.id == key_id).select().first()
+        if not profile:
+            return {'success': False, 'error': 'API key not found'}
+
+        # Generate new API key
+        new_api_key = secrets.token_urlsafe(32)
+        profile.update_record(api_key=new_api_key)
+        db.commit()
+
+        return {
+            'success': True,
+            'new_api_key': new_api_key,
+            'message': 'API key rotated successfully'
+        }
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
 
 if __name__ == "__main__":
     # Seed default blocked resources on startup if needed

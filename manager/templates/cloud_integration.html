@@ -1,0 +1,842 @@
+[[extend 'layout.html']]
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-cloud text-primary"></i> Cloud Integration Management</h2>
+        <div class="btn-group">
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addProviderModal">
+                <i class="fas fa-plus"></i> Add Cloud Provider
+            </button>
+            <button type="button" class="btn btn-info" onclick="refreshAllProviders()">
+                <i class="fas fa-sync"></i> Refresh All
+            </button>
+        </div>
+    </div>
+
+    <!-- Cloud Provider Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title mb-0">Connected Providers</h6>
+                            <h4 class="mb-0" id="connected-providers">0</h4>
+                        </div>
+                        <i class="fas fa-cloud fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title mb-0">Active Instances</h6>
+                            <h4 class="mb-0" id="active-instances">0</h4>
+                        </div>
+                        <i class="fas fa-server fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title mb-0">Monthly Cost</h6>
+                            <h4 class="mb-0" id="monthly-cost">$0</h4>
+                        </div>
+                        <i class="fas fa-dollar-sign fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title mb-0">Auto Scaling</h6>
+                            <h4 class="mb-0" id="auto-scaling-count">0</h4>
+                        </div>
+                        <i class="fas fa-chart-line fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cloud Providers Tabs -->
+    <ul class="nav nav-tabs" id="cloudTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="providers-tab" data-bs-toggle="tab" data-bs-target="#providers" type="button" role="tab">
+                <i class="fas fa-cloud"></i> Cloud Providers
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="instances-tab" data-bs-toggle="tab" data-bs-target="#instances" type="button" role="tab">
+                <i class="fas fa-server"></i> Database Instances
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="scaling-tab" data-bs-toggle="tab" data-bs-target="#scaling" type="button" role="tab">
+                <i class="fas fa-chart-line"></i> Auto Scaling
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="monitoring-tab" data-bs-toggle="tab" data-bs-target="#monitoring" type="button" role="tab">
+                <i class="fas fa-chart-area"></i> Cost Monitoring
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="cloudTabContent">
+        <!-- Cloud Providers Tab -->
+        <div class="tab-pane fade show active" id="providers" role="tabpanel">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-cloud"></i> Cloud Providers</h5>
+                    <input type="text" class="form-control form-control-sm" id="searchProviders" placeholder="Search providers..." style="width: 200px;">
+                </div>
+                <div class="card-body">
+                    <div class="row" id="providersGrid">
+                        <!-- Provider cards will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Database Instances Tab -->
+        <div class="tab-pane fade" id="instances" role="tabpanel">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-server"></i> Database Instances</h5>
+                    <div class="d-flex gap-2">
+                        <select class="form-select form-select-sm" id="filterProvider" style="width: 150px;">
+                            <option value="">All Providers</option>
+                        </select>
+                        <select class="form-select form-select-sm" id="filterRegion" style="width: 150px;">
+                            <option value="">All Regions</option>
+                        </select>
+                        <button class="btn btn-sm btn-success" onclick="importInstances()">
+                            <i class="fas fa-download"></i> Import Instances
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped" id="instancesTable">
+                            <thead>
+                                <tr>
+                                    <th>Instance Name</th>
+                                    <th>Provider</th>
+                                    <th>Region</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>CPU/Memory</th>
+                                    <th>Storage</th>
+                                    <th>Cost/Hour</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="instancesTableBody">
+                                <!-- Instances will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auto Scaling Tab -->
+        <div class="tab-pane fade" id="scaling" role="tabpanel">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-line"></i> Auto Scaling Policies</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">Global Scaling Settings</h6>
+                                </div>
+                                <div class="card-body">
+                                    <form id="globalScalingForm">
+                                        <div class="form-check form-switch mb-3">
+                                            <input class="form-check-input" type="checkbox" id="enableAutoScaling">
+                                            <label class="form-check-label" for="enableAutoScaling">
+                                                Enable Auto Scaling
+                                            </label>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label for="scaleUpThreshold" class="form-label">Scale Up Threshold (CPU %)</label>
+                                            <input type="range" class="form-range" id="scaleUpThreshold" min="50" max="95" value="80">
+                                            <div class="d-flex justify-content-between">
+                                                <span>50%</span>
+                                                <span id="scaleUpValue">80%</span>
+                                                <span>95%</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label for="scaleDownThreshold" class="form-label">Scale Down Threshold (CPU %)</label>
+                                            <input type="range" class="form-range" id="scaleDownThreshold" min="10" max="50" value="30">
+                                            <div class="d-flex justify-content-between">
+                                                <span>10%</span>
+                                                <span id="scaleDownValue">30%</span>
+                                                <span>50%</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label for="maxInstances" class="form-label">Maximum Instances</label>
+                                            <input type="number" class="form-control" id="maxInstances" value="10" min="1" max="100">
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label for="cooldownPeriod" class="form-label">Cooldown Period (minutes)</label>
+                                            <input type="number" class="form-control" id="cooldownPeriod" value="5" min="1" max="60">
+                                        </div>
+
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-save"></i> Save Scaling Policy
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">Cost Optimization</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="enableCostOptimization">
+                                        <label class="form-check-label" for="enableCostOptimization">
+                                            Enable Cost Optimization
+                                        </label>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="maxMonthlyCost" class="form-label">Max Monthly Budget ($)</label>
+                                        <input type="number" class="form-control" id="maxMonthlyCost" value="1000" min="100">
+                                    </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="useSpotInstances">
+                                        <label class="form-check-label" for="useSpotInstances">
+                                            Use Spot/Preemptible Instances
+                                        </label>
+                                    </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="scheduleDowntime">
+                                        <label class="form-check-label" for="scheduleDowntime">
+                                            Schedule Non-Production Downtime
+                                        </label>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Downtime Schedule</label>
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <input type="time" class="form-control" id="downtimeStart" value="22:00">
+                                                <small class="form-text text-muted">Start time</small>
+                                            </div>
+                                            <div class="col-6">
+                                                <input type="time" class="form-control" id="downtimeEnd" value="06:00">
+                                                <small class="form-text text-muted">End time</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cost Monitoring Tab -->
+        <div class="tab-pane fade" id="monitoring" role="tabpanel">
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-chart-area"></i> Cost Trends</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="costChart" height="400"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Cost Breakdown</h6>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="costBreakdownChart" height="300"></canvas>
+                        </div>
+                    </div>
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h6 class="mb-0">Recommendations</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="costRecommendations">
+                                <!-- Recommendations will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Cloud Provider Modal -->
+<div class="modal fade" id="addProviderModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-plus"></i> Add Cloud Provider</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addProviderForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="providerType" class="form-label">Cloud Provider *</label>
+                        <select class="form-select" id="providerType" required>
+                            <option value="">Select provider...</option>
+                            <option value="aws">Amazon AWS</option>
+                            <option value="gcp">Google Cloud Platform</option>
+                            <option value="azure">Microsoft Azure</option>
+                            <option value="digitalocean">DigitalOcean</option>
+                            <option value="linode">Linode</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="providerName" class="form-label">Provider Name *</label>
+                        <input type="text" class="form-control" id="providerName" required placeholder="e.g., Production AWS Account">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="providerRegion" class="form-label">Default Region *</label>
+                        <select class="form-select" id="providerRegion" required>
+                            <option value="">Select region...</option>
+                        </select>
+                    </div>
+
+                    <!-- AWS Credentials -->
+                    <div id="awsCredentials" class="provider-credentials" style="display: none;">
+                        <h6 class="border-bottom pb-2">AWS Credentials</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="awsAccessKey" class="form-label">Access Key ID</label>
+                                    <input type="text" class="form-control" id="awsAccessKey">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="awsSecretKey" class="form-label">Secret Access Key</label>
+                                    <input type="password" class="form-control" id="awsSecretKey">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="awsAssumeRole" class="form-label">IAM Role ARN (optional)</label>
+                            <input type="text" class="form-control" id="awsAssumeRole" placeholder="arn:aws:iam::123456789012:role/ArticDBMRole">
+                        </div>
+                    </div>
+
+                    <!-- GCP Credentials -->
+                    <div id="gcpCredentials" class="provider-credentials" style="display: none;">
+                        <h6 class="border-bottom pb-2">Google Cloud Credentials</h6>
+                        <div class="mb-3">
+                            <label for="gcpProjectId" class="form-label">Project ID</label>
+                            <input type="text" class="form-control" id="gcpProjectId">
+                        </div>
+                        <div class="mb-3">
+                            <label for="gcpServiceAccount" class="form-label">Service Account Key (JSON)</label>
+                            <textarea class="form-control" id="gcpServiceAccount" rows="4" placeholder="Paste service account JSON key here..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Azure Credentials -->
+                    <div id="azureCredentials" class="provider-credentials" style="display: none;">
+                        <h6 class="border-bottom pb-2">Azure Credentials</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="azureSubscriptionId" class="form-label">Subscription ID</label>
+                                    <input type="text" class="form-control" id="azureSubscriptionId">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="azureTenantId" class="form-label">Tenant ID</label>
+                                    <input type="text" class="form-control" id="azureTenantId">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="azureClientId" class="form-label">Client ID</label>
+                                    <input type="text" class="form-control" id="azureClientId">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="azureClientSecret" class="form-label">Client Secret</label>
+                                    <input type="password" class="form-control" id="azureClientSecret">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DigitalOcean/Linode Credentials -->
+                    <div id="doCredentials" class="provider-credentials" style="display: none;">
+                        <h6 class="border-bottom pb-2">API Credentials</h6>
+                        <div class="mb-3">
+                            <label for="doApiToken" class="form-label">API Token</label>
+                            <input type="password" class="form-control" id="doApiToken">
+                        </div>
+                    </div>
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="testConnection">
+                        <label class="form-check-label" for="testConnection">
+                            Test connection when saving
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-plus"></i> Add Provider
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Instance Details Modal -->
+<div class="modal fade" id="instanceDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-server"></i> Instance Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Name:</dt>
+                            <dd class="col-sm-8" id="detailInstanceName"></dd>
+                            <dt class="col-sm-4">Provider:</dt>
+                            <dd class="col-sm-8" id="detailInstanceProvider"></dd>
+                            <dt class="col-sm-4">Region:</dt>
+                            <dd class="col-sm-8" id="detailInstanceRegion"></dd>
+                            <dt class="col-sm-4">Type:</dt>
+                            <dd class="col-sm-8" id="detailInstanceType"></dd>
+                            <dt class="col-sm-4">Status:</dt>
+                            <dd class="col-sm-8" id="detailInstanceStatus"></dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">CPU:</dt>
+                            <dd class="col-sm-8" id="detailInstanceCpu"></dd>
+                            <dt class="col-sm-4">Memory:</dt>
+                            <dd class="col-sm-8" id="detailInstanceMemory"></dd>
+                            <dt class="col-sm-4">Storage:</dt>
+                            <dd class="col-sm-8" id="detailInstanceStorage"></dd>
+                            <dt class="col-sm-4">Cost/Hour:</dt>
+                            <dd class="col-sm-8" id="detailInstanceCost"></dd>
+                            <dt class="col-sm-4">Uptime:</dt>
+                            <dd class="col-sm-8" id="detailInstanceUptime"></dd>
+                        </dl>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <h6>Performance Metrics</h6>
+                    <canvas id="instanceMetricsChart" height="200"></canvas>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-warning" onclick="scaleInstance()">
+                    <i class="fas fa-expand-arrows-alt"></i> Scale
+                </button>
+                <button type="button" class="btn btn-outline-danger" onclick="stopInstance()">
+                    <i class="fas fa-stop"></i> Stop
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadCloudProviders();
+    loadCloudInstances();
+    loadScalingPolicies();
+    initializeCostCharts();
+
+    // Set up event listeners
+    document.getElementById('providerType').addEventListener('change', toggleCredentialFields);
+    document.getElementById('scaleUpThreshold').addEventListener('input', updateThresholdDisplay);
+    document.getElementById('scaleDownThreshold').addEventListener('input', updateThresholdDisplay);
+    document.getElementById('searchProviders').addEventListener('input', filterProviders);
+
+    // Form submissions
+    document.getElementById('addProviderForm').addEventListener('submit', addCloudProvider);
+    document.getElementById('globalScalingForm').addEventListener('submit', saveScalingPolicy);
+});
+
+function loadCloudProviders() {
+    fetch('/api/cloud-providers')
+        .then(response => response.json())
+        .then(data => {
+            updateProviderStats(data);
+            populateProvidersGrid(data.providers || []);
+        })
+        .catch(error => {
+            console.error('Error loading cloud providers:', error);
+            showToast('Error loading cloud providers', 'error');
+        });
+}
+
+function loadCloudInstances() {
+    fetch('/api/cloud-instances')
+        .then(response => response.json())
+        .then(data => {
+            populateInstancesTable(data.instances || []);
+            populateFilterOptions(data.instances || []);
+        })
+        .catch(error => {
+            console.error('Error loading cloud instances:', error);
+            showToast('Error loading cloud instances', 'error');
+        });
+}
+
+function updateProviderStats(data) {
+    document.getElementById('connected-providers').textContent = data.connected || 0;
+    document.getElementById('active-instances').textContent = data.total_instances || 0;
+    document.getElementById('monthly-cost').textContent = '$' + (data.monthly_cost || 0);
+    document.getElementById('auto-scaling-count').textContent = data.auto_scaling_enabled || 0;
+}
+
+function populateProvidersGrid(providers) {
+    const grid = document.getElementById('providersGrid');
+    grid.innerHTML = '';
+
+    providers.forEach(provider => {
+        const card = document.createElement('div');
+        card.className = 'col-md-4 mb-3';
+        card.innerHTML = `
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <i class="fab fa-${getProviderIcon(provider.type)} fa-2x me-2"></i>
+                        <div>
+                            <h6 class="mb-0">${provider.name}</h6>
+                            <small class="text-muted">${provider.region}</small>
+                        </div>
+                    </div>
+                    <span class="badge bg-${getStatusColor(provider.status)}">${provider.status}</span>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="border-end">
+                                <h5 class="mb-0">${provider.instances}</h5>
+                                <small class="text-muted">Instances</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="border-end">
+                                <h5 class="mb-0">$${provider.monthly_cost}</h5>
+                                <small class="text-muted">Monthly</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <h5 class="mb-0">${provider.utilization}%</h5>
+                            <small class="text-muted">Utilization</small>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="btn-group w-100">
+                            <button class="btn btn-outline-primary btn-sm" onclick="testProvider(${provider.id})">
+                                <i class="fas fa-check"></i> Test
+                            </button>
+                            <button class="btn btn-outline-info btn-sm" onclick="syncProvider(${provider.id})">
+                                <i class="fas fa-sync"></i> Sync
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm" onclick="removeProvider(${provider.id})">
+                                <i class="fas fa-trash"></i> Remove
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function getProviderIcon(type) {
+    const icons = {
+        'aws': 'aws',
+        'gcp': 'google',
+        'azure': 'microsoft',
+        'digitalocean': 'digital-ocean',
+        'linode': 'linode'
+    };
+    return icons[type] || 'cloud';
+}
+
+function getStatusColor(status) {
+    const colors = {
+        'connected': 'success',
+        'error': 'danger',
+        'connecting': 'warning',
+        'disconnected': 'secondary'
+    };
+    return colors[status] || 'secondary';
+}
+
+function toggleCredentialFields() {
+    const provider = document.getElementById('providerType').value;
+
+    // Hide all credential sections
+    document.querySelectorAll('.provider-credentials').forEach(section => {
+        section.style.display = 'none';
+    });
+
+    // Show relevant section
+    switch (provider) {
+        case 'aws':
+            document.getElementById('awsCredentials').style.display = 'block';
+            updateRegionOptions('aws');
+            break;
+        case 'gcp':
+            document.getElementById('gcpCredentials').style.display = 'block';
+            updateRegionOptions('gcp');
+            break;
+        case 'azure':
+            document.getElementById('azureCredentials').style.display = 'block';
+            updateRegionOptions('azure');
+            break;
+        case 'digitalocean':
+        case 'linode':
+            document.getElementById('doCredentials').style.display = 'block';
+            updateRegionOptions(provider);
+            break;
+    }
+}
+
+function updateRegionOptions(provider) {
+    const regions = {
+        'aws': [
+            { value: 'us-east-1', text: 'US East (N. Virginia)' },
+            { value: 'us-west-2', text: 'US West (Oregon)' },
+            { value: 'eu-west-1', text: 'Europe (Ireland)' },
+            { value: 'ap-southeast-1', text: 'Asia Pacific (Singapore)' }
+        ],
+        'gcp': [
+            { value: 'us-central1', text: 'US Central (Iowa)' },
+            { value: 'us-east1', text: 'US East (South Carolina)' },
+            { value: 'europe-west1', text: 'Europe West (Belgium)' },
+            { value: 'asia-east1', text: 'Asia East (Taiwan)' }
+        ],
+        'azure': [
+            { value: 'eastus', text: 'East US' },
+            { value: 'westus2', text: 'West US 2' },
+            { value: 'westeurope', text: 'West Europe' },
+            { value: 'southeastasia', text: 'Southeast Asia' }
+        ],
+        'digitalocean': [
+            { value: 'nyc1', text: 'New York 1' },
+            { value: 'sfo3', text: 'San Francisco 3' },
+            { value: 'ams3', text: 'Amsterdam 3' },
+            { value: 'sgp1', text: 'Singapore 1' }
+        ],
+        'linode': [
+            { value: 'us-east', text: 'Newark, NJ' },
+            { value: 'us-west', text: 'Fremont, CA' },
+            { value: 'eu-west', text: 'London, UK' },
+            { value: 'ap-south', text: 'Singapore' }
+        ]
+    };
+
+    const select = document.getElementById('providerRegion');
+    select.innerHTML = '<option value="">Select region...</option>';
+
+    if (regions[provider]) {
+        regions[provider].forEach(region => {
+            select.innerHTML += `<option value="${region.value}">${region.text}</option>`;
+        });
+    }
+}
+
+function updateThresholdDisplay() {
+    const scaleUp = document.getElementById('scaleUpThreshold').value;
+    const scaleDown = document.getElementById('scaleDownThreshold').value;
+
+    document.getElementById('scaleUpValue').textContent = scaleUp + '%';
+    document.getElementById('scaleDownValue').textContent = scaleDown + '%';
+}
+
+function addCloudProvider(e) {
+    e.preventDefault();
+
+    const formData = {
+        type: document.getElementById('providerType').value,
+        name: document.getElementById('providerName').value,
+        region: document.getElementById('providerRegion').value,
+        test_connection: document.getElementById('testConnection').checked
+    };
+
+    // Add provider-specific credentials
+    const provider = formData.type;
+    if (provider === 'aws') {
+        formData.credentials = {
+            access_key: document.getElementById('awsAccessKey').value,
+            secret_key: document.getElementById('awsSecretKey').value,
+            assume_role: document.getElementById('awsAssumeRole').value
+        };
+    } else if (provider === 'gcp') {
+        formData.credentials = {
+            project_id: document.getElementById('gcpProjectId').value,
+            service_account: document.getElementById('gcpServiceAccount').value
+        };
+    } else if (provider === 'azure') {
+        formData.credentials = {
+            subscription_id: document.getElementById('azureSubscriptionId').value,
+            tenant_id: document.getElementById('azureTenantId').value,
+            client_id: document.getElementById('azureClientId').value,
+            client_secret: document.getElementById('azureClientSecret').value
+        };
+    } else if (provider === 'digitalocean' || provider === 'linode') {
+        formData.credentials = {
+            api_token: document.getElementById('doApiToken').value
+        };
+    }
+
+    fetch('/api/cloud-providers', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addProviderModal'));
+            modal.hide();
+            loadCloudProviders();
+            document.getElementById('addProviderForm').reset();
+            showToast('Cloud provider added successfully', 'success');
+        } else {
+            showToast(data.error || 'Failed to add cloud provider', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error adding cloud provider:', error);
+        showToast('Error adding cloud provider', 'error');
+    });
+}
+
+function initializeCostCharts() {
+    // Cost trend chart
+    const costCtx = document.getElementById('costChart').getContext('2d');
+    window.costChart = new Chart(costCtx, {
+        type: 'line',
+        data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+            datasets: [{
+                label: 'Monthly Cost',
+                data: [1200, 1350, 1100, 1400, 1250, 1600],
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Cost breakdown chart
+    const breakdownCtx = document.getElementById('costBreakdownChart').getContext('2d');
+    window.costBreakdownChart = new Chart(breakdownCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['AWS RDS', 'GCP Cloud SQL', 'Azure Database', 'Storage', 'Network'],
+            datasets: [{
+                data: [800, 400, 300, 150, 100],
+                backgroundColor: [
+                    '#FF6384',
+                    '#36A2EB',
+                    '#FFCE56',
+                    '#4BC0C0',
+                    '#9966FF'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+function showToast(message, type = 'info') {
+    // Implementation for toast notifications
+    console.log(`${type.toUpperCase()}: ${message}`);
+}
+
+// Additional functions for cloud operations
+function testProvider(id) { /* Implementation */ }
+function syncProvider(id) { /* Implementation */ }
+function removeProvider(id) { /* Implementation */ }
+function importInstances() { /* Implementation */ }
+function scaleInstance() { /* Implementation */ }
+function stopInstance() { /* Implementation */ }
+function refreshAllProviders() { /* Implementation */ }
+function filterProviders() { /* Implementation */ }
+function populateInstancesTable(instances) { /* Implementation */ }
+function populateFilterOptions(instances) { /* Implementation */ }
+function loadScalingPolicies() { /* Implementation */ }
+function saveScalingPolicy(e) { /* Implementation */ }
+</script>

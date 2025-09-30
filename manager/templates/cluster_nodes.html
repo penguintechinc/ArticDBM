@@ -1,0 +1,507 @@
+[[extend 'layout.html']]
+
+[[block page_content]]
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="[[=URL('clusters')]]">Clusters</a></li>
+                <li class="breadcrumb-item active">[[=cluster.name]] - Nodes</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>Node Management</h2>
+        <p class="text-muted">Configure individual database nodes for the <strong>[[=cluster.name]]</strong> cluster</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="btn-group">
+            <button class="btn btn-success" onclick="addNode()">
+                <i class="bi bi-plus-circle"></i> Add Node
+            </button>
+            <button class="btn btn-info" onclick="rebalanceCluster()">
+                <i class="bi bi-arrow-repeat"></i> Rebalance
+            </button>
+            <button class="btn btn-warning" onclick="testConnections()">
+                <i class="bi bi-wifi"></i> Test All
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Cluster Overview Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="metric-card success">
+            <div class="metric-value">[[=len(nodes)]]</div>
+            <div class="metric-label">Total Nodes</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card info">
+            <div class="metric-value">[[=sum(1 for n in nodes if n.role in ['read', 'both'])]]</div>
+            <div class="metric-label">Read Nodes</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card warning">
+            <div class="metric-value">[[=sum(1 for n in nodes if n.role in ['write', 'both'])]]</div>
+            <div class="metric-label">Write Nodes</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card danger">
+            <div class="metric-value">[[=sum(n.weight for n in nodes)]]</div>
+            <div class="metric-label">Total Weight</div>
+        </div>
+    </div>
+</div>
+
+<!-- Node Configuration -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Node Configuration</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Node</th>
+                                <th>Role</th>
+                                <th>Weight</th>
+                                <th>Performance</th>
+                                <th>Health</th>
+                                <th>Features</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            [[for node in nodes:]]
+                            <tr id="node-[[=node.id]]">
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="node-indicator me-2" data-status="active"></div>
+                                        <div>
+                                            <strong>[[=node.host]]:[[=node.port]]</strong>
+                                            <br>
+                                            <small class="text-muted">[[=node.type.upper()]] Node</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <input type="radio" class="btn-check" name="role-[[=node.id]]"
+                                               id="read-[[=node.id]]" value="read"
+                                               [[if node.role == 'read':]]checked[[pass]]
+                                               onchange="updateNodeRole([[=node.id]], 'read')">
+                                        <label class="btn btn-outline-info" for="read-[[=node.id]]">
+                                            <i class="bi bi-eye"></i> Read
+                                        </label>
+
+                                        <input type="radio" class="btn-check" name="role-[[=node.id]]"
+                                               id="write-[[=node.id]]" value="write"
+                                               [[if node.role == 'write':]]checked[[pass]]
+                                               onchange="updateNodeRole([[=node.id]], 'write')">
+                                        <label class="btn btn-outline-warning" for="write-[[=node.id]]">
+                                            <i class="bi bi-pencil"></i> Write
+                                        </label>
+
+                                        <input type="radio" class="btn-check" name="role-[[=node.id]]"
+                                               id="both-[[=node.id]]" value="both"
+                                               [[if node.role == 'both':]]checked[[pass]]
+                                               onchange="updateNodeRole([[=node.id]], 'both')">
+                                        <label class="btn btn-outline-success" for="both-[[=node.id]]">
+                                            <i class="bi bi-arrow-left-right"></i> Both
+                                        </label>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm" style="width: 120px;">
+                                        <input type="number" class="form-control" value="[[=node.weight]]"
+                                               min="1" max="10" id="weight-[[=node.id]]"
+                                               onchange="updateNodeWeight([[=node.id]], this.value)">
+                                        <span class="input-group-text">
+                                            <div class="progress" style="width: 20px; height: 4px;">
+                                                <div class="progress-bar bg-primary"
+                                                     style="width: [[=node.weight * 10]]%"></div>
+                                            </div>
+                                        </span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="performance-metrics">
+                                        <small class="d-block">CPU: 65%</small>
+                                        <small class="d-block">Mem: 42%</small>
+                                        <small class="d-block text-success">Latency: 2ms</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="health-status">
+                                        <div class="progress mb-1" style="height: 6px;">
+                                            <div class="progress-bar bg-success" style="width: 95%"></div>
+                                        </div>
+                                        <small class="text-success">95% Healthy</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="feature-toggles">
+                                        <div class="form-check form-switch form-check-inline">
+                                            <input class="form-check-input" type="checkbox"
+                                                   id="cache-[[=node.id]]" checked
+                                                   onchange="toggleFeature([[=node.id]], 'cache', this.checked)">
+                                            <label class="form-check-label" for="cache-[[=node.id]]">Cache</label>
+                                        </div>
+                                        <div class="form-check form-switch form-check-inline">
+                                            <input class="form-check-input" type="checkbox"
+                                                   id="xdp-[[=node.id]]"
+                                                   onchange="toggleFeature([[=node.id]], 'xdp', this.checked)">
+                                            <label class="form-check-label" for="xdp-[[=node.id]]">XDP</label>
+                                        </div>
+                                        [[if cluster.type == 'mysql':]]
+                                        <div class="form-check form-switch form-check-inline">
+                                            <input class="form-check-input" type="checkbox"
+                                                   id="galera-[[=node.id]]"
+                                                   onchange="toggleFeature([[=node.id]], 'galera', this.checked)">
+                                            <label class="form-check-label" for="galera-[[=node.id]]">Galera</label>
+                                        </div>
+                                        [[pass]]
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" onclick="configureNode([[=node.id]])"
+                                                title="Configure">
+                                            <i class="bi bi-gear"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info" onclick="testNode([[=node.id]])"
+                                                title="Test Connection">
+                                            <i class="bi bi-wifi"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary" onclick="cloneNode([[=node.id]])"
+                                                title="Clone Node">
+                                            <i class="bi bi-copy"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger" onclick="removeNode([[=node.id]])"
+                                                title="Remove">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            [[pass]]
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Load Balancing Configuration -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Load Balancing Configuration</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Read Traffic Distribution</h6>
+                        <canvas id="readDistributionChart" height="100"></canvas>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Write Traffic Distribution</h6>
+                        <canvas id="writeDistributionChart" height="100"></canvas>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Load Balancing Algorithm</label>
+                        <select class="form-select" id="lbAlgorithm" onchange="updateLoadBalancing()">
+                            <option value="round_robin">Round Robin</option>
+                            <option value="weighted_round_robin" selected>Weighted Round Robin</option>
+                            <option value="least_connections">Least Connections</option>
+                            <option value="ip_hash">IP Hash</option>
+                            <option value="random">Random</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Health Check Interval (seconds)</label>
+                        <input type="number" class="form-control" value="30" min="5" max="300"
+                               onchange="updateHealthCheckInterval(this.value)">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+[[end]]
+
+[[block page_scripts]]
+<script>
+// Node management functions
+function updateNodeRole(nodeId, role) {
+    showLoading();
+    $.ajax({
+        url: `/api/database-servers/${nodeId}/role`,
+        method: 'PUT',
+        data: { role: role },
+        success: function() {
+            hideLoading();
+            showSuccess(`Node role updated to ${role}`);
+            updateDistributionCharts();
+        },
+        error: function() {
+            hideLoading();
+            showError('Failed to update node role');
+        }
+    });
+}
+
+function updateNodeWeight(nodeId, weight) {
+    $.ajax({
+        url: `/api/database-servers/${nodeId}/weight`,
+        method: 'PUT',
+        data: { weight: weight },
+        success: function() {
+            updateDistributionCharts();
+            // Update visual weight indicator
+            $(`#node-${nodeId} .progress-bar`).css('width', (weight * 10) + '%');
+        }
+    });
+}
+
+function toggleFeature(nodeId, feature, enabled) {
+    $.ajax({
+        url: `/api/database-servers/${nodeId}/features`,
+        method: 'PUT',
+        data: { feature: feature, enabled: enabled },
+        success: function() {
+            showSuccess(`${feature.toUpperCase()} ${enabled ? 'enabled' : 'disabled'} for node`);
+        },
+        error: function() {
+            showError(`Failed to toggle ${feature}`);
+            // Revert checkbox
+            $(`#${feature}-${nodeId}`).prop('checked', !enabled);
+        }
+    });
+}
+
+function addNode() {
+    Swal.fire({
+        title: 'Add New Node',
+        html: `
+            <div class="row">
+                <div class="col-md-8 mb-3">
+                    <input type="text" class="form-control" id="nodeHost" placeholder="Host address" required>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <input type="number" class="form-control" id="nodePort" placeholder="Port" value="[[=cluster.port]]" required>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <select class="form-select" id="nodeRole">
+                        <option value="both">Read/Write</option>
+                        <option value="read">Read Only</option>
+                        <option value="write">Write Only</option>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <input type="number" class="form-control" id="nodeWeight" placeholder="Weight" value="1" min="1" max="10">
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Add Node',
+        preConfirm: () => {
+            const host = document.getElementById('nodeHost').value;
+            const port = document.getElementById('nodePort').value;
+            const role = document.getElementById('nodeRole').value;
+            const weight = document.getElementById('nodeWeight').value;
+
+            if (!host || !port) {
+                Swal.showValidationMessage('Please enter host and port');
+                return false;
+            }
+
+            return { host, port, role, weight };
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            showLoading();
+            $.ajax({
+                url: `/api/clusters/[[=cluster.id]]/nodes`,
+                method: 'POST',
+                data: result.value,
+                success: function() {
+                    hideLoading();
+                    showSuccess('Node added successfully');
+                    setTimeout(() => location.reload(), 1500);
+                },
+                error: function() {
+                    hideLoading();
+                    showError('Failed to add node');
+                }
+            });
+        }
+    });
+}
+
+function testNode(nodeId) {
+    showLoading();
+    $.ajax({
+        url: `/api/database-servers/${nodeId}/test`,
+        method: 'POST',
+        success: function(data) {
+            hideLoading();
+            if (data.success) {
+                showSuccess(`Connection test passed - Latency: ${data.latency}ms`);
+                $(`#node-${nodeId} .node-indicator`).attr('data-status', 'active');
+            } else {
+                showError(`Connection test failed: ${data.error}`);
+                $(`#node-${nodeId} .node-indicator`).attr('data-status', 'error');
+            }
+        },
+        error: function() {
+            hideLoading();
+            showError('Failed to test connection');
+        }
+    });
+}
+
+function testConnections() {
+    showLoading();
+    const nodeIds = [[=XML(str([node.id for node in nodes]))]];
+
+    Promise.all(nodeIds.map(id =>
+        $.ajax({
+            url: `/api/database-servers/${id}/test`,
+            method: 'POST'
+        })
+    )).then(results => {
+        hideLoading();
+        const passed = results.filter(r => r.success).length;
+        const total = results.length;
+
+        if (passed === total) {
+            showSuccess(`All ${total} nodes passed connection tests`);
+        } else {
+            showError(`${passed}/${total} nodes passed connection tests`);
+        }
+    });
+}
+
+function rebalanceCluster() {
+    confirmAction(
+        'Rebalance Cluster?',
+        'This will redistribute traffic across all healthy nodes.',
+        function() {
+            showLoading();
+            $.ajax({
+                url: `/api/clusters/[[=cluster.id]]/rebalance`,
+                method: 'POST',
+                success: function() {
+                    hideLoading();
+                    showSuccess('Cluster rebalanced successfully');
+                    updateDistributionCharts();
+                },
+                error: function() {
+                    hideLoading();
+                    showError('Failed to rebalance cluster');
+                }
+            });
+        }
+    );
+}
+
+function updateDistributionCharts() {
+    // Update read/write distribution charts based on current node weights and roles
+    const nodes = [[=XML(str([{'id': node.id, 'role': node.role, 'weight': node.weight, 'host': node.host} for node in nodes]))]];
+
+    const readNodes = nodes.filter(n => n.role === 'read' || n.role === 'both');
+    const writeNodes = nodes.filter(n => n.role === 'write' || n.role === 'both');
+
+    // Read distribution chart
+    const readCtx = document.getElementById('readDistributionChart').getContext('2d');
+    new Chart(readCtx, {
+        type: 'doughnut',
+        data: {
+            labels: readNodes.map(n => n.host),
+            datasets: [{
+                data: readNodes.map(n => n.weight),
+                backgroundColor: [
+                    'rgba(52, 152, 219, 0.8)',
+                    'rgba(155, 89, 182, 0.8)',
+                    'rgba(46, 204, 113, 0.8)',
+                    'rgba(241, 196, 15, 0.8)',
+                    'rgba(231, 76, 60, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+
+    // Write distribution chart
+    const writeCtx = document.getElementById('writeDistributionChart').getContext('2d');
+    new Chart(writeCtx, {
+        type: 'doughnut',
+        data: {
+            labels: writeNodes.map(n => n.host),
+            datasets: [{
+                data: writeNodes.map(n => n.weight),
+                backgroundColor: [
+                    'rgba(230, 126, 34, 0.8)',
+                    'rgba(52, 73, 94, 0.8)',
+                    'rgba(26, 188, 156, 0.8)',
+                    'rgba(142, 68, 173, 0.8)',
+                    'rgba(192, 57, 43, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+}
+
+// Initialize charts on page load
+$(document).ready(function() {
+    updateDistributionCharts();
+});
+
+// Node indicator styles
+$('<style>').appendTo('head').html(`
+    .node-indicator {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .node-indicator[data-status="active"] {
+        background-color: #27ae60;
+        box-shadow: 0 0 10px rgba(39, 174, 96, 0.5);
+    }
+    .node-indicator[data-status="error"] {
+        background-color: #e74c3c;
+        box-shadow: 0 0 10px rgba(231, 76, 60, 0.5);
+    }
+    .node-indicator[data-status="warning"] {
+        background-color: #f39c12;
+        box-shadow: 0 0 10px rgba(243, 156, 18, 0.5);
+    }
+`);
+</script>
+[[end]]
