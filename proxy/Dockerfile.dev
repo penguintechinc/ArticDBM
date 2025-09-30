@@ -1,0 +1,48 @@
+FROM golang:1.23-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# Build without XDP for demo purposes
+RUN CGO_ENABLED=0 GOOS=linux go build -a -tags 'no_xdp' -ldflags '-w -s' -o articdbm-proxy .
+
+FROM alpine:3.19
+
+RUN apk --no-cache add ca-certificates sqlite
+
+WORKDIR /root/
+
+COPY --from=builder /app/articdbm-proxy .
+
+ENV PROXY_PORT=8080 \
+    METRICS_PORT=9090 \
+    REDIS_ADDR=redis:6379 \
+    MYSQL_ENABLED=true \
+    MYSQL_PORT=3306 \
+    POSTGRESQL_ENABLED=true \
+    POSTGRESQL_PORT=5432 \
+    MONGODB_ENABLED=true \
+    MONGODB_PORT=27017 \
+    REDIS_PROXY_ENABLED=true \
+    REDIS_PROXY_PORT=6379 \
+    SQLITE_ENABLED=true \
+    SQLITE_PORT=8765 \
+    SQL_INJECTION_DETECTION=true \
+    MAX_CONNECTIONS=500 \
+    CONNECTION_TIMEOUT=30 \
+    QUERY_TIMEOUT=60 \
+    TLS_ENABLED=false \
+    CLUSTER_MODE=true \
+    XDP_ENABLED=false \
+    AFXDP_ENABLED=false \
+    NUMA_OPTIMIZATION=false
+
+EXPOSE 3306 5432 27017 6379 8765 9091 9092
+
+CMD ["./articdbm-proxy"]
