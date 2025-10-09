@@ -27,17 +27,17 @@ import redis
 from pydantic import BaseModel, Field as PydanticField
 import requests
 
-from kubernetes import client, config
-from kubernetes.client.rest import ApiException
-import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
-from google.cloud import sql_v1
-from google.oauth2 import service_account
-import openai
-import anthropic
+# from kubernetes import client, config
+# from kubernetes.client.rest import ApiException
+# import boto3
+# from botocore.exceptions import ClientError, NoCredentialsError
+# from google.cloud import sql_v1
+# from google.oauth2 import service_account
+# import openai
+# import anthropic
 
 db = DAL(
-    os.getenv("DATABASE_URL", "postgresql://articdbm:articdbm@postgres/articdbm"),
+    os.getenv("DATABASE_URL", "sqlite://storage.db"),
     pool_size=20,
     migrate=True,
     fake_migrate_all=False
@@ -1129,7 +1129,7 @@ def sync_users_to_redis():
     return len(users_data), len(permissions_data)
 
 @action('api/health', method=['GET'])
-@cors
+@action.uses(cors)
 def health():
     return {'status': 'healthy', 'timestamp': datetime.utcnow().isoformat()}
 
@@ -4553,7 +4553,7 @@ def profile():
 
 # API Key Management API Routes
 @action('api/api-keys', method=['GET'])
-@cors.enable
+@action.uses(cors)
 def api_get_api_keys():
     """Get all API keys with statistics"""
     try:
@@ -4621,7 +4621,7 @@ def api_get_api_keys():
         return {'success': False, 'error': str(e)}
 
 @action('api/api-keys', method=['POST'])
-@cors.enable
+@action.uses(cors)
 def api_create_api_key():
     """Create a new API key"""
     try:
@@ -4676,7 +4676,7 @@ def api_create_api_key():
         return {'success': False, 'error': str(e)}
 
 @action('api/api-keys/<key_id:int>', method=['GET'])
-@cors.enable
+@action.uses(cors)
 def api_get_api_key(key_id):
     """Get specific API key details"""
     try:
@@ -4718,7 +4718,7 @@ def api_get_api_key(key_id):
         return {'success': False, 'error': str(e)}
 
 @action('api/api-keys/<key_id:int>', method=['PUT'])
-@cors.enable
+@action.uses(cors)
 def api_update_api_key(key_id):
     """Update API key settings"""
     try:
@@ -4747,7 +4747,7 @@ def api_update_api_key(key_id):
         return {'success': False, 'error': str(e)}
 
 @action('api/api-keys/<key_id:int>', method=['DELETE'])
-@cors.enable
+@action.uses(cors)
 def api_delete_api_key(key_id):
     """Delete API key"""
     try:
@@ -4764,7 +4764,7 @@ def api_delete_api_key(key_id):
         return {'success': False, 'error': str(e)}
 
 @action('api/api-keys/<key_id:int>/rotate', method=['POST'])
-@cors.enable
+@action.uses(cors)
 def api_rotate_api_key(key_id):
     """Rotate API key (generate new one)"""
     try:

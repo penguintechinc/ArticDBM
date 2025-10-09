@@ -281,6 +281,8 @@ Key variables in `proxy/internal/config/config.go`:
 - Cache frequently accessed data in Redis
 - Validate all API inputs
 - Use py4web authentication
+- **ALWAYS reference py4web documentation**: https://py4web.com/_documentation to ensure compliance with framework standards
+- **Deviation from py4web standards**: If implementation deviates from documented py4web patterns, ask user for approval before proceeding
 
 ### When Adding New Database Support
 1. Add protocol handler in `proxy/internal/handlers/`

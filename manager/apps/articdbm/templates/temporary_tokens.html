@@ -1,0 +1,714 @@
+[[extend 'layout.html']]
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-clock text-info"></i> Temporary Access Tokens</h2>
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createTokenModal">
+            <i class="fas fa-plus"></i> Generate New Token
+        </button>
+    </div>
+
+    <!-- Token Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title mb-0">Total Tokens</h6>
+                            <h4 class="mb-0" id="total-tokens">0</h4>
+                        </div>
+                        <i class="fas fa-clock fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title mb-0">Active Tokens</h6>
+                            <h4 class="mb-0" id="active-tokens">0</h4>
+                        </div>
+                        <i class="fas fa-check-circle fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title mb-0">Expiring Soon</h6>
+                            <h4 class="mb-0" id="expiring-tokens">0</h4>
+                        </div>
+                        <i class="fas fa-exclamation-triangle fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title mb-0">Used Tokens</h6>
+                            <h4 class="mb-0" id="used-tokens">0</h4>
+                        </div>
+                        <i class="fas fa-times-circle fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Tokens Table -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-list"></i> Temporary Access Tokens</h5>
+            <div class="d-flex gap-2">
+                <input type="text" class="form-control form-control-sm" id="searchTokens" placeholder="Search tokens..." style="width: 200px;">
+                <select class="form-select form-select-sm" id="filterStatus" style="width: 150px;">
+                    <option value="">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="expired">Expired</option>
+                    <option value="used">Used</option>
+                    <option value="revoked">Revoked</option>
+                </select>
+                <select class="form-select form-select-sm" id="filterType" style="width: 150px;">
+                    <option value="">All Types</option>
+                    <option value="single_use">Single Use</option>
+                    <option value="time_limited">Time Limited</option>
+                    <option value="usage_limited">Usage Limited</option>
+                </select>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped" id="tokensTable">
+                    <thead>
+                        <tr>
+                            <th>Token Name</th>
+                            <th>Token Preview</th>
+                            <th>User</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Expires</th>
+                            <th>Usage</th>
+                            <th>Purpose</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tokensTableBody">
+                        <!-- Tokens will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Token Modal -->
+<div class="modal fade" id="createTokenModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-plus"></i> Generate Temporary Access Token</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="createTokenForm">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="tokenName" class="form-label">Token Name *</label>
+                                <input type="text" class="form-control" id="tokenName" required>
+                                <div class="form-text">Descriptive name for this token</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="tokenUser" class="form-label">User *</label>
+                                <select class="form-select" id="tokenUser" required>
+                                    <option value="">Select user...</option>
+                                    <!-- Users will be populated here -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="tokenPurpose" class="form-label">Purpose *</label>
+                        <textarea class="form-control" id="tokenPurpose" rows="2" required placeholder="Describe the purpose of this temporary access (e.g., 'Emergency database access for John from Support')"></textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="tokenType" class="form-label">Token Type *</label>
+                                <select class="form-select" id="tokenType" required>
+                                    <option value="">Select type...</option>
+                                    <option value="single_use">Single Use (one-time only)</option>
+                                    <option value="time_limited">Time Limited (expires after duration)</option>
+                                    <option value="usage_limited">Usage Limited (expires after X uses)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="tokenDuration" class="form-label">Duration</label>
+                                <select class="form-select" id="tokenDuration">
+                                    <option value="1">1 hour</option>
+                                    <option value="2">2 hours</option>
+                                    <option value="4">4 hours</option>
+                                    <option value="8" selected>8 hours</option>
+                                    <option value="24">24 hours</option>
+                                    <option value="48">48 hours</option>
+                                    <option value="72">72 hours</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row" id="customDurationRow" style="display: none;">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="customExpiration" class="form-label">Custom Expiration</label>
+                                <input type="datetime-local" class="form-control" id="customExpiration">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="maxUsages" class="form-label">Max Usages</label>
+                                <input type="number" class="form-control" id="maxUsages" min="1" value="1">
+                                <div class="form-text">Maximum number of times this token can be used</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Permissions</label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="permTempReadData" checked>
+                                    <label class="form-check-label" for="permTempReadData">
+                                        Read Data
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="permTempWriteData">
+                                    <label class="form-check-label" for="permTempWriteData">
+                                        Write Data
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="permTempViewMetrics">
+                                    <label class="form-check-label" for="permTempViewMetrics">
+                                        View Metrics
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="permTempManageUsers">
+                                    <label class="form-check-label" for="permTempManageUsers">
+                                        Manage Users
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="permTempManageClusters">
+                                    <label class="form-check-label" for="permTempManageClusters">
+                                        Manage Clusters
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="permTempSystemAdmin">
+                                    <label class="form-check-label" for="permTempSystemAdmin">
+                                        System Administration
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="tokenRateLimit" class="form-label">Rate Limit (requests/hour)</label>
+                                <input type="number" class="form-control" id="tokenRateLimit" value="100" min="1">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="tokenIpWhitelist" class="form-label">IP Whitelist</label>
+                                <input type="text" class="form-control" id="tokenIpWhitelist" placeholder="192.168.1.0/24, 10.0.0.1">
+                                <div class="form-text">Comma-separated IPs/CIDRs (optional)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="tokenNotifyUser">
+                        <label class="form-check-label" for="tokenNotifyUser">
+                            Notify user via email when token is created
+                        </label>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="tokenRequireTls" checked>
+                        <label class="form-check-label" for="tokenRequireTls">
+                            Require TLS/SSL for this token
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-clock"></i> Generate Token
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Token Display Modal -->
+<div class="modal fade" id="tokenDisplayModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-check-circle"></i> Temporary Token Generated</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Important:</strong> This token will only be displayed once. Please copy and securely share it with the intended user.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Temporary Access Token</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control font-monospace" id="generatedToken" readonly>
+                        <button class="btn btn-outline-secondary" type="button" onclick="copyToken()">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Token Details</label>
+                    <ul class="list-group">
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Expires:</span>
+                            <span id="tokenExpiresDisplay"></span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Max Uses:</span>
+                            <span id="tokenMaxUsesDisplay"></span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Type:</span>
+                            <span id="tokenTypeDisplay"></span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Usage Instructions</label>
+                    <pre class="bg-light p-3 rounded"><code>curl -H "Authorization: Bearer <span id="exampleToken"></span>" \
+     https://your-domain.com/api/databases</code></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check"></i> I've Copied the Token
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Token Details Modal -->
+<div class="modal fade" id="tokenDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-info-circle"></i> Token Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">Token Information</h6>
+                            </div>
+                            <div class="card-body">
+                                <dl class="row">
+                                    <dt class="col-sm-4">Name:</dt>
+                                    <dd class="col-sm-8" id="detailTokenName"></dd>
+                                    <dt class="col-sm-4">User:</dt>
+                                    <dd class="col-sm-8" id="detailTokenUser"></dd>
+                                    <dt class="col-sm-4">Type:</dt>
+                                    <dd class="col-sm-8" id="detailTokenType"></dd>
+                                    <dt class="col-sm-4">Status:</dt>
+                                    <dd class="col-sm-8" id="detailTokenStatus"></dd>
+                                    <dt class="col-sm-4">Created:</dt>
+                                    <dd class="col-sm-8" id="detailTokenCreated"></dd>
+                                    <dt class="col-sm-4">Expires:</dt>
+                                    <dd class="col-sm-8" id="detailTokenExpires"></dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">Usage Statistics</h6>
+                            </div>
+                            <div class="card-body">
+                                <dl class="row">
+                                    <dt class="col-sm-6">Uses:</dt>
+                                    <dd class="col-sm-6"><span id="detailTokenUses">0</span> / <span id="detailTokenMaxUses">1</span></dd>
+                                    <dt class="col-sm-6">Rate Limit:</dt>
+                                    <dd class="col-sm-6" id="detailTokenRateLimit"></dd>
+                                    <dt class="col-sm-6">IP Whitelist:</dt>
+                                    <dd class="col-sm-6" id="detailTokenIpWhitelist"></dd>
+                                    <dt class="col-sm-6">Last Used:</dt>
+                                    <dd class="col-sm-6" id="detailTokenLastUsed"></dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Purpose & Permissions</h6>
+                        </div>
+                        <div class="card-body">
+                            <p><strong>Purpose:</strong> <span id="detailTokenPurpose"></span></p>
+                            <p><strong>Permissions:</strong> <span id="detailTokenPermissions"></span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger" onclick="revokeToken()">
+                    <i class="fas fa-ban"></i> Revoke Token
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentTokenId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadTokens();
+    loadUsers();
+
+    // Set up event listeners
+    document.getElementById('searchTokens').addEventListener('input', filterTokens);
+    document.getElementById('filterStatus').addEventListener('change', filterTokens);
+    document.getElementById('filterType').addEventListener('change', filterTokens);
+    document.getElementById('tokenType').addEventListener('change', toggleTokenOptions);
+    document.getElementById('tokenDuration').addEventListener('change', toggleCustomDuration);
+
+    // Form submission
+    document.getElementById('createTokenForm').addEventListener('submit', createToken);
+});
+
+function loadTokens() {
+    fetch('/api/temporary-access')
+        .then(response => response.json())
+        .then(data => {
+            updateTokenStats(data);
+            populateTokensTable(data.tokens || []);
+        })
+        .catch(error => {
+            console.error('Error loading tokens:', error);
+            showToast('Error loading temporary tokens', 'error');
+        });
+}
+
+function loadUsers() {
+    fetch('/api/users')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('tokenUser');
+            select.innerHTML = '<option value="">Select user...</option>';
+            (data.users || []).forEach(user => {
+                select.innerHTML += `<option value="${user.id}">${user.username} (${user.email})</option>`;
+            });
+        })
+        .catch(error => console.error('Error loading users:', error));
+}
+
+function updateTokenStats(data) {
+    document.getElementById('total-tokens').textContent = data.total || 0;
+    document.getElementById('active-tokens').textContent = data.active || 0;
+    document.getElementById('expiring-tokens').textContent = data.expiring_soon || 0;
+    document.getElementById('used-tokens').textContent = data.used || 0;
+}
+
+function populateTokensTable(tokens) {
+    const tbody = document.getElementById('tokensTableBody');
+    tbody.innerHTML = '';
+
+    tokens.forEach(token => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${token.name}</td>
+            <td><code>${token.token_preview}</code></td>
+            <td>${token.username}</td>
+            <td>
+                <span class="badge bg-${getTypeColor(token.type)}">${formatTokenType(token.type)}</span>
+            </td>
+            <td>
+                <span class="badge bg-${getStatusColor(token.status)}">${token.status}</span>
+            </td>
+            <td>${formatDate(token.created_at)}</td>
+            <td>${token.expires_at ? formatDate(token.expires_at) : 'Never'}</td>
+            <td>${token.usage_count}/${token.max_uses || '∞'}</td>
+            <td>${token.purpose || 'N/A'}</td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-info" onclick="viewTokenDetails(${token.id})" title="View Details">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="revokeTokenDirect(${token.id})" title="Revoke">
+                        <i class="fas fa-ban"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function getTypeColor(type) {
+    const colors = {
+        'single_use': 'warning',
+        'time_limited': 'info',
+        'usage_limited': 'primary'
+    };
+    return colors[type] || 'secondary';
+}
+
+function getStatusColor(status) {
+    const colors = {
+        'active': 'success',
+        'expired': 'warning',
+        'used': 'secondary',
+        'revoked': 'danger'
+    };
+    return colors[status] || 'secondary';
+}
+
+function formatTokenType(type) {
+    const types = {
+        'single_use': 'Single Use',
+        'time_limited': 'Time Limited',
+        'usage_limited': 'Usage Limited'
+    };
+    return types[type] || type;
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return 'N/A';
+    return new Date(dateStr).toLocaleDateString();
+}
+
+function toggleTokenOptions() {
+    const type = document.getElementById('tokenType').value;
+    const durationRow = document.getElementById('tokenDuration').closest('.col-md-6');
+
+    if (type === 'single_use') {
+        durationRow.style.display = 'none';
+        document.getElementById('maxUsages').value = 1;
+    } else {
+        durationRow.style.display = 'block';
+    }
+}
+
+function toggleCustomDuration() {
+    const duration = document.getElementById('tokenDuration').value;
+    const customRow = document.getElementById('customDurationRow');
+
+    if (duration === 'custom') {
+        customRow.style.display = 'block';
+        document.getElementById('customExpiration').required = true;
+    } else {
+        customRow.style.display = 'none';
+        document.getElementById('customExpiration').required = false;
+    }
+}
+
+function createToken(e) {
+    e.preventDefault();
+
+    const formData = {
+        name: document.getElementById('tokenName').value,
+        user_id: document.getElementById('tokenUser').value,
+        purpose: document.getElementById('tokenPurpose').value,
+        type: document.getElementById('tokenType').value,
+        duration_hours: document.getElementById('tokenDuration').value === 'custom' ? null : parseInt(document.getElementById('tokenDuration').value),
+        custom_expiration: document.getElementById('customExpiration').value,
+        max_uses: parseInt(document.getElementById('maxUsages').value) || 1,
+        permissions: getSelectedTempPermissions(),
+        rate_limit: parseInt(document.getElementById('tokenRateLimit').value),
+        ip_whitelist: document.getElementById('tokenIpWhitelist').value,
+        notify_user: document.getElementById('tokenNotifyUser').checked,
+        require_tls: document.getElementById('tokenRequireTls').checked
+    };
+
+    fetch('/api/temporary-access', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('generatedToken').value = data.token;
+            document.getElementById('exampleToken').textContent = data.token;
+            document.getElementById('tokenExpiresDisplay').textContent = data.expires_at || 'Never';
+            document.getElementById('tokenMaxUsesDisplay').textContent = data.max_uses || '∞';
+            document.getElementById('tokenTypeDisplay').textContent = formatTokenType(data.type);
+
+            const createModal = bootstrap.Modal.getInstance(document.getElementById('createTokenModal'));
+            createModal.hide();
+
+            const displayModal = new bootstrap.Modal(document.getElementById('tokenDisplayModal'));
+            displayModal.show();
+
+            loadTokens();
+            document.getElementById('createTokenForm').reset();
+            showToast('Temporary access token created successfully', 'success');
+        } else {
+            showToast(data.error || 'Failed to create token', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error creating token:', error);
+        showToast('Error creating temporary access token', 'error');
+    });
+}
+
+function getSelectedTempPermissions() {
+    const permissions = [];
+    const checkboxes = [
+        'permTempReadData', 'permTempWriteData', 'permTempViewMetrics',
+        'permTempManageUsers', 'permTempManageClusters', 'permTempSystemAdmin'
+    ];
+
+    checkboxes.forEach(id => {
+        if (document.getElementById(id).checked) {
+            permissions.push(id.replace('permTemp', '').toLowerCase());
+        }
+    });
+
+    return permissions;
+}
+
+function viewTokenDetails(tokenId) {
+    fetch(`/api/temporary-access/${tokenId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const token = data.token;
+                currentTokenId = tokenId;
+
+                document.getElementById('detailTokenName').textContent = token.name;
+                document.getElementById('detailTokenUser').textContent = token.username;
+                document.getElementById('detailTokenType').textContent = formatTokenType(token.type);
+                document.getElementById('detailTokenStatus').innerHTML = `<span class="badge bg-${getStatusColor(token.status)}">${token.status}</span>`;
+                document.getElementById('detailTokenCreated').textContent = formatDate(token.created_at);
+                document.getElementById('detailTokenExpires').textContent = token.expires_at ? formatDate(token.expires_at) : 'Never';
+                document.getElementById('detailTokenUses').textContent = token.usage_count || 0;
+                document.getElementById('detailTokenMaxUses').textContent = token.max_uses || '∞';
+                document.getElementById('detailTokenRateLimit').textContent = token.rate_limit + ' req/hr';
+                document.getElementById('detailTokenIpWhitelist').textContent = token.ip_whitelist || 'Any IP';
+                document.getElementById('detailTokenLastUsed').textContent = token.last_used_at ? formatDate(token.last_used_at) : 'Never';
+                document.getElementById('detailTokenPurpose').textContent = token.purpose || 'N/A';
+                document.getElementById('detailTokenPermissions').textContent = (token.permissions || []).join(', ') || 'None';
+
+                const modal = new bootstrap.Modal(document.getElementById('tokenDetailsModal'));
+                modal.show();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading token details:', error);
+            showToast('Error loading token details', 'error');
+        });
+}
+
+function revokeToken() {
+    if (currentTokenId && confirm('Are you sure you want to revoke this token? This action cannot be undone.')) {
+        revokeTokenDirect(currentTokenId);
+        const modal = bootstrap.Modal.getInstance(document.getElementById('tokenDetailsModal'));
+        modal.hide();
+    }
+}
+
+function revokeTokenDirect(tokenId) {
+    if (confirm('Are you sure you want to revoke this token? This action cannot be undone.')) {
+        fetch(`/api/temporary-access/${tokenId}/revoke`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                loadTokens();
+                showToast('Token revoked successfully', 'success');
+            } else {
+                showToast(data.error || 'Failed to revoke token', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error revoking token:', error);
+            showToast('Error revoking token', 'error');
+        });
+    }
+}
+
+function filterTokens() {
+    const searchTerm = document.getElementById('searchTokens').value.toLowerCase();
+    const statusFilter = document.getElementById('filterStatus').value;
+    const typeFilter = document.getElementById('filterType').value;
+    const rows = document.querySelectorAll('#tokensTableBody tr');
+
+    rows.forEach(row => {
+        const name = row.cells[0].textContent.toLowerCase();
+        const user = row.cells[2].textContent.toLowerCase();
+        const type = row.cells[3].textContent.toLowerCase();
+        const status = row.cells[4].textContent.toLowerCase();
+
+        const matchesSearch = name.includes(searchTerm) || user.includes(searchTerm);
+        const matchesStatus = !statusFilter || status.includes(statusFilter);
+        const matchesType = !typeFilter || type.includes(typeFilter.replace('_', ' '));
+
+        row.style.display = matchesSearch && matchesStatus && matchesType ? '' : 'none';
+    });
+}
+
+function copyToken() {
+    const input = document.getElementById('generatedToken');
+    input.select();
+    document.execCommand('copy');
+    showToast('Token copied to clipboard', 'success');
+}
+
+function showToast(message, type = 'info') {
+    // Implementation for toast notifications
+    console.log(`${type.toUpperCase()}: ${message}`);
+}
+</script>

@@ -1,0 +1,1 @@
+# ArticDBM Manager py4web application

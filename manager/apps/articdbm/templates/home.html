@@ -1,0 +1,163 @@
+[[extend 'layout.html']]
+
+[[block page_content]]
+<div class="container-fluid">
+    <!-- Welcome Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-gradient-primary text-white" style="background: linear-gradient(135deg, #2c3e50, #3498db);">
+                <div class="card-body text-center py-5">
+                    <h1 class="display-4">🚀 ArticDBM Enterprise Manager</h1>
+                    <p class="lead">Comprehensive Database Proxy Management Platform</p>
+                    <p class="mb-0">Version [[=version]]</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="metric-card success">
+                <div class="metric-value">5</div>
+                <div class="metric-label">Active Clusters</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card info">
+                <div class="metric-value">12</div>
+                <div class="metric-label">Total Nodes</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card warning">
+                <div class="metric-value">42</div>
+                <div class="metric-label">API Keys</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card danger">
+                <div class="metric-value">0</div>
+                <div class="metric-label">Security Issues</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feature Cards -->
+    <div class="row">
+        [[for feature in features:]]
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 feature-card">
+                <div class="card-body text-center">
+                    <div class="feature-icon mb-3">
+                        <i class="bi [[=feature['icon']]] display-4 text-primary"></i>
+                    </div>
+                    <h5 class="card-title">[[=feature['name']]]</h5>
+                    <p class="card-text text-muted">[[=feature['description']]]</p>
+                    <a href="[[=feature['url']]]" class="btn btn-primary">
+                        <i class="bi bi-arrow-right-circle"></i> Go to [[=feature['name']]]
+                    </a>
+                </div>
+            </div>
+        </div>
+        [[pass]]
+    </div>
+
+    <!-- Features Overview -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4>🎯 Enterprise Features</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>Database Support</h5>
+                            <ul class="list-unstyled">
+                                <li><i class="bi bi-check-circle text-success"></i> MySQL & MariaDB</li>
+                                <li><i class="bi bi-check-circle text-success"></i> PostgreSQL</li>
+                                <li><i class="bi bi-check-circle text-success"></i> MongoDB</li>
+                                <li><i class="bi bi-check-circle text-success"></i> Redis</li>
+                                <li><i class="bi bi-check-circle text-success"></i> SQLite</li>
+                                <li><i class="bi bi-check-circle text-success"></i> Galera Clusters</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Security & Performance</h5>
+                            <ul class="list-unstyled">
+                                <li><i class="bi bi-check-circle text-success"></i> SQL Injection Protection</li>
+                                <li><i class="bi bi-check-circle text-success"></i> Threat Intelligence Integration</li>
+                                <li><i class="bi bi-check-circle text-success"></i> ML-based Optimization</li>
+                                <li><i class="bi bi-check-circle text-success"></i> XDP/AF_XDP Support</li>
+                                <li><i class="bi bi-check-circle text-success"></i> Connection Pooling</li>
+                                <li><i class="bi bi-check-circle text-success"></i> Read/Write Splitting</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4>⚡ Quick Actions</h4>
+                </div>
+                <div class="card-body">
+                    <div class="btn-group" role="group">
+                        <a href="[[=URL('clusters/create')]]" class="btn btn-success">
+                            <i class="bi bi-plus-circle"></i> Create Cluster
+                        </a>
+                        <a href="[[=URL('nodes/create')]]" class="btn btn-info">
+                            <i class="bi bi-plus-circle"></i> Add Node
+                        </a>
+                        <a href="[[=URL('users/create')]]" class="btn btn-warning">
+                            <i class="bi bi-person-plus"></i> Add User
+                        </a>
+                        <a href="[[=URL('api-keys')]]" class="btn btn-primary">
+                            <i class="bi bi-key"></i> Generate API Key
+                        </a>
+                        <a href="[[=URL('monitoring/health')]]" class="btn btn-secondary">
+                            <i class="bi bi-heart-pulse"></i> Health Check
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+[[end]]
+
+[[block page_css]]
+<style>
+    .feature-card {
+        transition: all 0.3s;
+        border: none;
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    }
+
+    .feature-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 2rem 0 rgba(58, 59, 69, 0.25);
+    }
+
+    .feature-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(52, 152, 219, 0.1);
+        border-radius: 50%;
+    }
+
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #2c3e50, #3498db);
+    }
+</style>
+[[end]]

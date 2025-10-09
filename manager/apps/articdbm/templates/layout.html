@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[[=title or "ArticDBM Manager"]] - Enterprise Database Proxy</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
+    <!-- Select2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --success-color: #27ae60;
+            --danger-color: #e74c3c;
+            --warning-color: #f39c12;
+            --info-color: #16a085;
+            --dark-color: #34495e;
+            --light-color: #ecf0f1;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f5f7fa;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 250px;
+            background: var(--primary-color);
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+
+        .sidebar .logo {
+            padding: 20px;
+            background: rgba(0,0,0,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .sidebar .logo h3 {
+            color: white;
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .sidebar .logo small {
+            color: var(--secondary-color);
+        }
+
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar ul li {
+            position: relative;
+        }
+
+        .sidebar ul li a {
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            padding: 15px 20px;
+            display: block;
+            transition: all 0.3s;
+        }
+
+        .sidebar ul li a:hover,
+        .sidebar ul li.active a {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border-left: 3px solid var(--secondary-color);
+        }
+
+        .sidebar ul li a i {
+            margin-right: 10px;
+            width: 20px;
+            display: inline-block;
+        }
+
+        .sidebar .submenu {
+            background: rgba(0,0,0,0.2);
+        }
+
+        .sidebar .submenu a {
+            padding-left: 40px;
+            font-size: 0.9rem;
+        }
+
+        /* Main content */
+        .main-content {
+            margin-left: 250px;
+            min-height: 100vh;
+        }
+
+        .topbar {
+            background: white;
+            padding: 15px 30px;
+            border-bottom: 1px solid #e3e6f0;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        }
+
+        .topbar .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .content-wrapper {
+            padding: 30px;
+        }
+
+        /* Cards */
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            margin-bottom: 30px;
+        }
+
+        .card-header {
+            background: white;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+        }
+
+        /* Status badges */
+        .status-active {
+            background: var(--success-color);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .status-inactive {
+            background: var(--danger-color);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .status-warning {
+            background: var(--warning-color);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        /* Metrics cards */
+        .metric-card {
+            padding: 20px;
+            border-radius: 10px;
+            background: white;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        }
+
+        .metric-card .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .metric-card .metric-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .metric-card.success {
+            border-left: 4px solid var(--success-color);
+        }
+
+        .metric-card.info {
+            border-left: 4px solid var(--info-color);
+        }
+
+        .metric-card.warning {
+            border-left: 4px solid var(--warning-color);
+        }
+
+        .metric-card.danger {
+            border-left: 4px solid var(--danger-color);
+        }
+
+        /* Forms */
+        .form-label {
+            font-weight: 500;
+            color: var(--dark-color);
+            margin-bottom: 8px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                margin-left: -250px;
+            }
+
+            .sidebar.show {
+                margin-left: 0;
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            display: none;
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+    </style>
+
+    [[block page_css]][[end]]
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="logo">
+            <h3>🚀 ArticDBM</h3>
+            <small>v1.2.0 Enterprise</small>
+        </div>
+        <ul>
+            <li [[if request.path == '/':]]class="active"[[pass]]>
+                <a href="[[=URL('index')]]"><i class="bi bi-speedometer2"></i> Dashboard</a>
+            </li>
+
+            <!-- Cluster Management -->
+            <li>
+                <a href="#clusterMenu" data-bs-toggle="collapse">
+                    <i class="bi bi-diagram-3"></i> Clusters
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <ul id="clusterMenu" class="collapse submenu">
+                    <li><a href="[[=URL('clusters')]]">All Clusters</a></li>
+                    <li><a href="[[=URL('clusters/create')]]">Create Cluster</a></li>
+                    <li><a href="[[=URL('nodes')]]">Node Management</a></li>
+                    <li><a href="[[=URL('galera')]]">Galera Clusters</a></li>
+                </ul>
+            </li>
+
+            <!-- Security -->
+            <li>
+                <a href="#securityMenu" data-bs-toggle="collapse">
+                    <i class="bi bi-shield-lock"></i> Security
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <ul id="securityMenu" class="collapse submenu">
+                    <li><a href="[[=URL('security/overview')]]">Overview</a></li>
+                    <li><a href="[[=URL('security/rules')]]">SQL Injection Rules</a></li>
+                    <li><a href="[[=URL('security/threat-intel')]]">Threat Intelligence</a></li>
+                    <li><a href="[[=URL('security/blocked')]]">Blocked Patterns</a></li>
+                    <li><a href="[[=URL('security/issues')]]">Security Issues</a></li>
+                </ul>
+            </li>
+
+            <!-- Users & Access -->
+            <li>
+                <a href="#usersMenu" data-bs-toggle="collapse">
+                    <i class="bi bi-people"></i> Users & Access
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <ul id="usersMenu" class="collapse submenu">
+                    <li><a href="[[=URL('users')]]">User Management</a></li>
+                    <li><a href="[[=URL('permissions')]]">Permissions</a></li>
+                    <li><a href="[[=URL('api-keys')]]">API Keys</a></li>
+                    <li><a href="[[=URL('temporary-tokens')]]">Temporary Access</a></li>
+                </ul>
+            </li>
+
+            <!-- Performance -->
+            <li>
+                <a href="#performanceMenu" data-bs-toggle="collapse">
+                    <i class="bi bi-speedometer"></i> Performance
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <ul id="performanceMenu" class="collapse submenu">
+                    <li><a href="[[=URL('performance/overview')]]">Overview</a></li>
+                    <li><a href="[[=URL('performance/cache')]]">Cache Settings</a></li>
+                    <li><a href="[[=URL('performance/ml')]]">ML Optimization</a></li>
+                    <li><a href="[[=URL('performance/xdp')]]">XDP/AF_XDP</a></li>
+                    <li><a href="[[=URL('performance/numa')]]">NUMA Settings</a></li>
+                </ul>
+            </li>
+
+            <!-- Monitoring -->
+            <li>
+                <a href="#monitoringMenu" data-bs-toggle="collapse">
+                    <i class="bi bi-graph-up"></i> Monitoring
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <ul id="monitoringMenu" class="collapse submenu">
+                    <li><a href="[[=URL('monitoring/metrics')]]">Metrics</a></li>
+                    <li><a href="[[=URL('monitoring/logs')]]">Audit Logs</a></li>
+                    <li><a href="[[=URL('monitoring/alerts')]]">Alerts</a></li>
+                    <li><a href="[[=URL('monitoring/health')]]">Health Checks</a></li>
+                </ul>
+            </li>
+
+            <!-- Cloud -->
+            <li>
+                <a href="#cloudMenu" data-bs-toggle="collapse">
+                    <i class="bi bi-cloud"></i> Cloud
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <ul id="cloudMenu" class="collapse submenu">
+                    <li><a href="[[=URL('cloud-integration')]]">Cloud Integration</a></li>
+                    <li><a href="[[=URL('cloud/providers')]]">Providers</a></li>
+                    <li><a href="[[=URL('cloud/instances')]]">Instances</a></li>
+                    <li><a href="[[=URL('cloud/scaling')]]">Auto-Scaling</a></li>
+                    <li><a href="[[=URL('cloud/backup')]]">Backup & DR</a></li>
+                </ul>
+            </li>
+
+            <!-- Settings -->
+            <li>
+                <a href="[[=URL('settings')]]">
+                    <i class="bi bi-gear"></i> Settings
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Bar -->
+        <div class="topbar d-flex justify-content-between align-items-center">
+            <div>
+                <button class="btn btn-link d-md-none" id="sidebarToggle">
+                    <i class="bi bi-list"></i>
+                </button>
+                <h4 class="mb-0">[[=title or "Dashboard"]]</h4>
+            </div>
+            <div class="user-info">
+                <span class="text-muted">[[=auth.get_user().get('email', 'Guest')]]</span>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="bi bi-person-circle"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="[[=URL('profile')]]">Profile</a></li>
+                        <li><a class="dropdown-item" href="[[=URL('settings')]]">Settings</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="[[=URL('auth/logout')]]">Logout</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Wrapper -->
+        <div class="content-wrapper">
+            [[block page_content]][[end]]
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner-border text-light" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+        // Initialize DataTables
+        $(document).ready(function() {
+            $('.data-table').DataTable({
+                responsive: true,
+                pageLength: 25,
+                language: {
+                    search: "Search:",
+                    lengthMenu: "Show _MENU_ entries",
+                    info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                    paginate: {
+                        first: "First",
+                        last: "Last",
+                        next: "Next",
+                        previous: "Previous"
+                    }
+                }
+            });
+
+            // Initialize Select2
+            $('.select2').select2({
+                theme: 'bootstrap-5'
+            });
+
+            // Sidebar toggle
+            $('#sidebarToggle').click(function() {
+                $('.sidebar').toggleClass('show');
+            });
+        });
+
+        // Show loading overlay
+        function showLoading() {
+            $('#loadingOverlay').addClass('show');
+        }
+
+        // Hide loading overlay
+        function hideLoading() {
+            $('#loadingOverlay').removeClass('show');
+        }
+
+        // Confirmation dialog
+        function confirmAction(title, text, callback) {
+            Swal.fire({
+                title: title,
+                text: text,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, proceed!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    callback();
+                }
+            });
+        }
+
+        // Success notification
+        function showSuccess(message) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Success',
+                text: message,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+
+        // Error notification
+        function showError(message) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: message
+            });
+        }
+    </script>
+
+    [[block page_scripts]][[end]]
+</body>
+</html>

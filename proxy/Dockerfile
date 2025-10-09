@@ -1,6 +1,6 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
-RUN apk add --no-cache git ca-certificates clang llvm make linux-headers libbpf-dev
+RUN apk add --no-cache git ca-certificates gcc musl-dev
 
 WORKDIR /app
 
@@ -9,12 +9,11 @@ RUN go mod download
 
 COPY . .
 
-RUN make build-xdp
-RUN CGO_ENABLED=1 GOOS=linux go build -a -o articdbm-proxy .
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o articdbm-proxy .
 
 FROM alpine:3.19
 
-RUN apk --no-cache add ca-certificates libbpf
+RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 

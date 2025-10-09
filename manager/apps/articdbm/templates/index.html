@@ -1,0 +1,400 @@
+[[extend 'layout.html']]
+
+[[block page_content]]
+<div class="row">
+    <!-- Metrics Cards Row -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="metric-card success">
+            <div class="metric-value">[[=stats.get('total_clusters', 0)]]</div>
+            <div class="metric-label">Active Clusters</div>
+            <small class="text-muted">
+                <i class="bi bi-arrow-up text-success"></i> [[=stats.get('clusters_change', '0')]]% from last hour
+            </small>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="metric-card info">
+            <div class="metric-value">[[=stats.get('total_nodes', 0)]]</div>
+            <div class="metric-label">Database Nodes</div>
+            <small class="text-muted">
+                [[=stats.get('healthy_nodes', 0)]] healthy
+            </small>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="metric-card warning">
+            <div class="metric-value">[[=stats.get('queries_per_sec', '0')]]</div>
+            <div class="metric-label">Queries/Second</div>
+            <small class="text-muted">
+                Peak: [[=stats.get('peak_qps', '0')]]
+            </small>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="metric-card danger">
+            <div class="metric-value">[[=stats.get('blocked_threats', 0)]]</div>
+            <div class="metric-label">Threats Blocked</div>
+            <small class="text-muted">
+                Last 24 hours
+            </small>
+        </div>
+    </div>
+</div>
+
+<!-- Main Dashboard Content -->
+<div class="row">
+    <!-- Cluster Status -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Cluster Status</h5>
+                <a href="[[=URL('clusters')]]" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-circle"></i> Manage Clusters
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Cluster Name</th>
+                                <th>Type</th>
+                                <th>Nodes</th>
+                                <th>Status</th>
+                                <th>Health</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            [[for cluster in clusters:]]
+                            <tr>
+                                <td>
+                                    <strong>[[=cluster.name]]</strong>
+                                    [[if cluster.is_galera:]]
+                                    <span class="badge bg-info ms-1">Galera</span>
+                                    [[pass]]
+                                </td>
+                                <td>[[=cluster.type.upper()]]</td>
+                                <td>
+                                    <span class="badge bg-secondary">[[=cluster.node_count]] nodes</span>
+                                </td>
+                                <td>
+                                    [[if cluster.status == 'active':]]
+                                    <span class="status-active">Active</span>
+                                    [[elif cluster.status == 'degraded':]]
+                                    <span class="status-warning">Degraded</span>
+                                    [[else:]]
+                                    <span class="status-inactive">Inactive</span>
+                                    [[pass]]
+                                </td>
+                                <td>
+                                    <div class="progress" style="width: 100px;">
+                                        <div class="progress-bar bg-[[=cluster.health_color]]"
+                                             style="width: [[=cluster.health_percent]]%">
+                                            [[=cluster.health_percent]]%
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="[[=URL('clusters/view', cluster.id)]]"
+                                           class="btn btn-outline-primary" title="View">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <a href="[[=URL('clusters/nodes', cluster.id)]]"
+                                           class="btn btn-outline-info" title="Nodes">
+                                            <i class="bi bi-diagram-3"></i>
+                                        </a>
+                                        <a href="[[=URL('clusters/settings', cluster.id)]]"
+                                           class="btn btn-outline-secondary" title="Settings">
+                                            <i class="bi bi-gear"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            [[pass]]
+                            [[if not clusters:]]
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">
+                                    No clusters configured.
+                                    <a href="[[=URL('clusters/create')]]">Create your first cluster</a>
+                                </td>
+                            </tr>
+                            [[pass]]
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions & Alerts -->
+    <div class="col-lg-4">
+        <!-- Quick Actions -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="[[=URL('clusters/create')]]" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Create Cluster
+                    </a>
+                    <a href="[[=URL('users/create')]]" class="btn btn-success">
+                        <i class="bi bi-person-plus"></i> Add User
+                    </a>
+                    <a href="[[=URL('security/scan')]]" class="btn btn-warning">
+                        <i class="bi bi-shield-check"></i> Run Security Scan
+                    </a>
+                    <a href="[[=URL('temp-access/generate')]]" class="btn btn-info">
+                        <i class="bi bi-key"></i> Generate Temp Access
+                    </a>
+                    <a href="[[=URL('monitoring/health')]]" class="btn btn-secondary">
+                        <i class="bi bi-heart-pulse"></i> Health Check
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Alerts -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Recent Alerts</h5>
+                <a href="[[=URL('monitoring/alerts')]]" class="btn btn-link btn-sm">View All</a>
+            </div>
+            <div class="card-body">
+                [[for alert in recent_alerts:]]
+                <div class="alert alert-[[=alert.severity]] alert-dismissible mb-2" role="alert">
+                    <small class="d-block">
+                        <strong>[[=alert.title]]</strong>
+                        <span class="float-end text-muted">[[=alert.time_ago]]</span>
+                    </small>
+                    <small>[[=alert.message]]</small>
+                </div>
+                [[pass]]
+                [[if not recent_alerts:]]
+                <p class="text-muted text-center mb-0">No recent alerts</p>
+                [[pass]]
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Performance Charts -->
+<div class="row mt-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Query Performance (Last 24h)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="queryChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Cache Hit Ratio</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="cacheChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Feature Status -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Feature Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <h6>Security Features</h6>
+                        <ul class="list-unstyled">
+                            <li>
+                                [[if features.sql_injection_detection:]]
+                                <i class="bi bi-check-circle text-success"></i>
+                                [[else:]]
+                                <i class="bi bi-x-circle text-danger"></i>
+                                [[pass]]
+                                SQL Injection Detection
+                            </li>
+                            <li>
+                                [[if features.threat_intelligence:]]
+                                <i class="bi bi-check-circle text-success"></i>
+                                [[else:]]
+                                <i class="bi bi-x-circle text-danger"></i>
+                                [[pass]]
+                                Threat Intelligence
+                            </li>
+                            <li>
+                                [[if features.audit_logging:]]
+                                <i class="bi bi-check-circle text-success"></i>
+                                [[else:]]
+                                <i class="bi bi-x-circle text-danger"></i>
+                                [[pass]]
+                                Audit Logging
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-3">
+                        <h6>Performance Features</h6>
+                        <ul class="list-unstyled">
+                            <li>
+                                [[if features.ml_optimization:]]
+                                <i class="bi bi-check-circle text-success"></i>
+                                [[else:]]
+                                <i class="bi bi-x-circle text-danger"></i>
+                                [[pass]]
+                                ML Query Optimization
+                            </li>
+                            <li>
+                                [[if features.xdp_enabled:]]
+                                <i class="bi bi-check-circle text-success"></i>
+                                [[else:]]
+                                <i class="bi bi-x-circle text-danger"></i>
+                                [[pass]]
+                                XDP Acceleration
+                            </li>
+                            <li>
+                                [[if features.numa_optimization:]]
+                                <i class="bi bi-check-circle text-success"></i>
+                                [[else:]]
+                                <i class="bi bi-x-circle text-danger"></i>
+                                [[pass]]
+                                NUMA Optimization
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-3">
+                        <h6>Database Support</h6>
+                        <ul class="list-unstyled">
+                            <li>
+                                [[if features.galera_support:]]
+                                <i class="bi bi-check-circle text-success"></i>
+                                [[else:]]
+                                <i class="bi bi-x-circle text-danger"></i>
+                                [[pass]]
+                                Galera Clusters
+                            </li>
+                            <li>
+                                [[if features.sqlite_support:]]
+                                <i class="bi bi-check-circle text-success"></i>
+                                [[else:]]
+                                <i class="bi bi-x-circle text-danger"></i>
+                                [[pass]]
+                                SQLite Support
+                            </li>
+                            <li>
+                                [[if features.multi_cloud:]]
+                                <i class="bi bi-check-circle text-success"></i>
+                                [[else:]]
+                                <i class="bi bi-x-circle text-danger"></i>
+                                [[pass]]
+                                Multi-Cloud Ready
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-3">
+                        <h6>Enterprise Features</h6>
+                        <ul class="list-unstyled">
+                            <li>
+                                [[if features.blue_green_deployment:]]
+                                <i class="bi bi-check-circle text-success"></i>
+                                [[else:]]
+                                <i class="bi bi-x-circle text-danger"></i>
+                                [[pass]]
+                                Blue/Green Deployment
+                            </li>
+                            <li>
+                                [[if features.disaster_recovery:]]
+                                <i class="bi bi-check-circle text-success"></i>
+                                [[else:]]
+                                <i class="bi bi-x-circle text-danger"></i>
+                                [[pass]]
+                                Disaster Recovery
+                            </li>
+                            <li>
+                                [[if features.compliance_scanning:]]
+                                <i class="bi bi-check-circle text-success"></i>
+                                [[else:]]
+                                <i class="bi bi-x-circle text-danger"></i>
+                                [[pass]]
+                                Compliance Scanning
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+[[end]]
+
+[[block page_scripts]]
+<script>
+    // Query Performance Chart
+    const queryCtx = document.getElementById('queryChart').getContext('2d');
+    new Chart(queryCtx, {
+        type: 'line',
+        data: {
+            labels: [[=XML(query_chart_labels)]],
+            datasets: [{
+                label: 'Queries/sec',
+                data: [[=XML(query_chart_data)]],
+                borderColor: 'rgb(52, 152, 219)',
+                backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    // Cache Hit Ratio Chart
+    const cacheCtx = document.getElementById('cacheChart').getContext('2d');
+    new Chart(cacheCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Cache Hits', 'Cache Misses'],
+            datasets: [{
+                data: [[=cache_hits]], [[=cache_misses]]],
+                backgroundColor: [
+                    'rgba(39, 174, 96, 0.8)',
+                    'rgba(231, 76, 60, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+</script>
+[[end]]

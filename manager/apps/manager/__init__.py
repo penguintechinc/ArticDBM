@@ -1,0 +1,1 @@
+# Manager app for ArticDBM - all management features

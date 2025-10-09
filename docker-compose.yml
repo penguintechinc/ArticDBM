@@ -5,8 +5,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: articdbm-redis
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     volumes:
       - redis-data:/data
     command: redis-server --appendonly yes
@@ -21,12 +21,26 @@ services:
       POSTGRES_USER: articdbm
       POSTGRES_PASSWORD: articdbm
       POSTGRES_DB: articdbm
-    ports:
-      - "5433:5432"
+    expose:
+      - "5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - articdbm-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: articdbm-nginx
+    ports:
+      - "8000"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - manager
+    networks:
+      - articdbm-network
+    restart: unless-stopped
 
   # ArticDBM Manager
   manager:
@@ -39,8 +53,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       SESSION_SECRET: ${SESSION_SECRET:-supersecret123}
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     depends_on:
       - redis
       - postgres
@@ -72,12 +86,12 @@ services:
       MYSQL_BACKENDS: '[{"host":"test-mysql","port":3306,"type":"both","user":"root","password":"testpass","database":"testdb"}]'
       POSTGRESQL_BACKENDS: '[{"host":"test-postgres","port":5432,"type":"both","user":"testuser","password":"testpass","database":"testdb"}]'
     ports:
-      - "3306:3306"    # MySQL proxy
-      - "5432:5432"    # PostgreSQL proxy
-      - "1433:1433"    # MSSQL proxy
-      - "27017:27017"  # MongoDB proxy
-      - "6380:6380"    # Redis proxy
-      - "9090:9090"    # Metrics
+      - "3306"    # MySQL proxy
+      - "5432"    # PostgreSQL proxy
+      - "1433"    # MSSQL proxy
+      - "27017"   # MongoDB proxy
+      - "6380"    # Redis proxy
+      - "9090"    # Metrics
     depends_on:
       - redis
       - manager
@@ -94,8 +108,8 @@ services:
       MYSQL_DATABASE: testdb
       MYSQL_USER: testuser
       MYSQL_PASSWORD: testpass
-    ports:
-      - "3307:3306"
+    expose:
+      - "3306"
     volumes:
       - mysql-data:/var/lib/mysql
     networks:
@@ -109,8 +123,8 @@ services:
       POSTGRES_USER: testuser
       POSTGRES_PASSWORD: testpass
       POSTGRES_DB: testdb
-    ports:
-      - "5434:5432"
+    expose:
+      - "5432"
     volumes:
       - test-postgres-data:/var/lib/postgresql/data
     networks:
@@ -120,8 +134,8 @@ services:
   test-redis:
     image: redis:7-alpine
     container_name: articdbm-test-redis
-    ports:
-      - "6381:6379"
+    expose:
+      - "6379"
     networks:
       - articdbm-network
 
@@ -133,8 +147,8 @@ services:
       MONGO_INITDB_ROOT_USERNAME: testuser
       MONGO_INITDB_ROOT_PASSWORD: testpass
       MONGO_INITDB_DATABASE: testdb
-    ports:
-      - "27018:27017"
+    expose:
+      - "27017"
     volumes:
       - mongodb-data:/data/db
     networks:
@@ -148,8 +162,8 @@ services:
       ACCEPT_EULA: Y
       SA_PASSWORD: TestPass123!
       MSSQL_PID: Developer
-    ports:
-      - "1434:1433"
+    expose:
+      - "1433"
     volumes:
       - mssql-data:/var/opt/mssql
     networks:

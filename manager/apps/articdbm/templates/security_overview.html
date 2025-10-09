@@ -1,0 +1,468 @@
+[[extend 'layout.html']]
+
+[[block page_content]]
+<div class="row mb-4">
+    <div class="col-12">
+        <h2>Security Overview</h2>
+        <p class="text-muted">Comprehensive security management for ArticDBM database proxy</p>
+    </div>
+</div>
+
+<!-- Security Metrics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="metric-card success">
+            <div class="metric-value">[[=stats.get('active_rules', 0)]]</div>
+            <div class="metric-label">Active Security Rules</div>
+            <small class="text-muted">of [[=stats.get('total_rules', 0)]] total</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card danger">
+            <div class="metric-value">[[=stats.get('recent_blocks', 0)]]</div>
+            <div class="metric-label">Threats Blocked</div>
+            <small class="text-muted">Last 24 hours</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card info">
+            <div class="metric-value">[[=stats.get('threat_feeds', 0)]]</div>
+            <div class="metric-label">Threat Intel Feeds</div>
+            <small class="text-muted">[[=stats.get('threat_indicators', 0)]] indicators</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card warning">
+            <div class="metric-value">[[=stats.get('blocked_patterns', 0)]]</div>
+            <div class="metric-label">Blocked Patterns</div>
+            <small class="text-muted">Database/Table/User blocks</small>
+        </div>
+    </div>
+</div>
+
+<!-- Security Features Configuration -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">SQL Injection Protection</h5>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="sqlInjectionEnabled" checked
+                           onchange="toggleGlobalFeature('sql_injection', this.checked)">
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Advanced pattern matching to detect and block SQL injection attempts</p>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>Detection Sensitivity</span>
+                    <select class="form-select form-select-sm w-auto" onchange="updateSensitivity(this.value)">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="paranoid">Paranoid</option>
+                    </select>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>Action on Detection</span>
+                    <select class="form-select form-select-sm w-auto" onchange="updateAction('sql_injection', this.value)">
+                        <option value="log">Log Only</option>
+                        <option value="alert">Alert</option>
+                        <option value="block" selected>Block</option>
+                    </select>
+                </div>
+                <a href="[[=URL('security/rules')]]" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-list-ul"></i> Manage Rules
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Threat Intelligence</h5>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="threatIntelEnabled" checked
+                           onchange="toggleGlobalFeature('threat_intel', this.checked)">
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Real-time threat intelligence from STIX/TAXII, MISP, and OpenIOC feeds</p>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>Auto-Update Feeds</span>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" checked>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>Update Interval</span>
+                    <select class="form-select form-select-sm w-auto">
+                        <option value="300">5 minutes</option>
+                        <option value="900">15 minutes</option>
+                        <option value="3600" selected>1 hour</option>
+                        <option value="21600">6 hours</option>
+                    </select>
+                </div>
+                <a href="[[=URL('security/threat-intel')]]" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-shield-exclamation"></i> Manage Feeds
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Audit Logging</h5>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="auditEnabled" checked
+                           onchange="toggleGlobalFeature('audit_logging', this.checked)">
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Comprehensive logging of all database queries and access attempts</p>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>Log Level</span>
+                    <select class="form-select form-select-sm w-auto" onchange="updateLogLevel(this.value)">
+                        <option value="basic">Basic</option>
+                        <option value="detailed" selected>Detailed</option>
+                        <option value="verbose">Verbose</option>
+                    </select>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>Retention Period</span>
+                    <select class="form-select form-select-sm w-auto">
+                        <option value="7">7 days</option>
+                        <option value="30" selected>30 days</option>
+                        <option value="90">90 days</option>
+                        <option value="365">1 year</option>
+                    </select>
+                </div>
+                <a href="[[=URL('monitoring/logs')]]" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-journal-text"></i> View Logs
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Access Control</h5>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="accessControlEnabled" checked
+                           onchange="toggleGlobalFeature('access_control', this.checked)">
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Advanced user authentication and authorization controls</p>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>Multi-Factor Auth</span>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox">
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>IP Whitelisting</span>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" checked>
+                    </div>
+                </div>
+                <a href="[[=URL('users')]]" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-people"></i> Manage Users
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Per-Database Security Configuration -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Per-Database Security Policies</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Configure security settings individually for each database</p>
+
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Database</th>
+                                <th>SQL Injection</th>
+                                <th>Threat Intel</th>
+                                <th>Audit Logging</th>
+                                <th>Block Default Resources</th>
+                                <th>Custom Rules</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Sample database configurations -->
+                            <tr>
+                                <td>
+                                    <strong>production_mysql</strong>
+                                    <br><small class="text-muted">MySQL 8.0</small>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" checked>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" checked>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" checked>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" checked>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">3 rules</span>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" onclick="configureDatabase(1)">
+                                            <i class="bi bi-gear"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary" onclick="scanDatabase(1)">
+                                            <i class="bi bi-shield-check"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <strong>analytics_postgres</strong>
+                                    <br><small class="text-muted">PostgreSQL 15</small>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" checked>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox">
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" checked>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox">
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">0 rules</span>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" onclick="configureDatabase(2)">
+                                            <i class="bi bi-gear"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary" onclick="scanDatabase(2)">
+                                            <i class="bi bi-shield-check"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions Panel -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Security Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <button class="btn btn-warning w-100 mb-2" onclick="runSecurityScan()">
+                            <i class="bi bi-shield-check"></i><br>
+                            Run Security Scan
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-info w-100 mb-2" onclick="updateThreatFeeds()">
+                            <i class="bi bi-cloud-download"></i><br>
+                            Update Threat Feeds
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-secondary w-100 mb-2" onclick="exportSecurityReport()">
+                            <i class="bi bi-file-earmark-text"></i><br>
+                            Export Security Report
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-primary w-100 mb-2" onclick="viewSecurityIssues()">
+                            <i class="bi bi-exclamation-triangle"></i><br>
+                            View Security Issues
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+[[end]]
+
+[[block page_scripts]]
+<script>
+function toggleGlobalFeature(feature, enabled) {
+    showLoading();
+    $.ajax({
+        url: '/api/security/global',
+        method: 'PUT',
+        data: {
+            feature: feature,
+            enabled: enabled
+        },
+        success: function() {
+            hideLoading();
+            showSuccess(`${feature.replace('_', ' ')} ${enabled ? 'enabled' : 'disabled'} globally`);
+        },
+        error: function() {
+            hideLoading();
+            showError(`Failed to update ${feature}`);
+            // Revert checkbox
+            $(`#${feature}Enabled`).prop('checked', !enabled);
+        }
+    });
+}
+
+function runSecurityScan() {
+    confirmAction(
+        'Run Security Scan?',
+        'This will scan all database configurations for security issues and vulnerabilities.',
+        function() {
+            showLoading();
+            $.ajax({
+                url: '/api/security/scan',
+                method: 'POST',
+                success: function(data) {
+                    hideLoading();
+                    if (data.issues_found > 0) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Security Issues Found',
+                            text: `Found ${data.issues_found} security issues. View the security issues page for details.`,
+                            showCancelButton: true,
+                            confirmButtonText: 'View Issues',
+                            cancelButtonText: 'Close'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                window.location.href = '/security/issues';
+                            }
+                        });
+                    } else {
+                        showSuccess('No security issues found!');
+                    }
+                },
+                error: function() {
+                    hideLoading();
+                    showError('Failed to run security scan');
+                }
+            });
+        }
+    );
+}
+
+function updateThreatFeeds() {
+    showLoading();
+    $.ajax({
+        url: '/api/security/threat-intel/update',
+        method: 'POST',
+        success: function(data) {
+            hideLoading();
+            showSuccess(`Updated ${data.feeds_updated} threat intelligence feeds`);
+            // Update the metrics
+            $('.metric-value').eq(2).text(data.total_indicators);
+        },
+        error: function() {
+            hideLoading();
+            showError('Failed to update threat feeds');
+        }
+    });
+}
+
+function exportSecurityReport() {
+    showLoading();
+    $.ajax({
+        url: '/api/security/report',
+        method: 'GET',
+        success: function(data) {
+            hideLoading();
+            // Create and download the report
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `articdbm-security-report-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            showSuccess('Security report exported');
+        },
+        error: function() {
+            hideLoading();
+            showError('Failed to export security report');
+        }
+    });
+}
+
+function viewSecurityIssues() {
+    window.location.href = '/security/issues';
+}
+
+function configureDatabase(dbId) {
+    window.location.href = `/api/databases/${dbId}/security-config`;
+}
+
+function scanDatabase(dbId) {
+    showLoading();
+    $.ajax({
+        url: `/api/databases/${dbId}/security-scan`,
+        method: 'POST',
+        success: function(data) {
+            hideLoading();
+            if (data.issues > 0) {
+                showError(`Found ${data.issues} security issues in database`);
+            } else {
+                showSuccess('Database passed security scan');
+            }
+        },
+        error: function() {
+            hideLoading();
+            showError('Failed to scan database');
+        }
+    });
+}
+
+// Initialize tooltips
+$(document).ready(function() {
+    $('[data-bs-toggle="tooltip"]').tooltip();
+});
+</script>
+[[end]]
